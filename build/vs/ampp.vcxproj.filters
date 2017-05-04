@@ -1,0 +1,111 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hpp;hxx;hm;inl;inc;xsd</Extensions>
+    </Filter>
+    <Filter Include="Resource Files">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="Header Files\generic">
+      <UniqueIdentifier>{5646ce9e-457c-43c5-b16a-f3923682ea51}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\macros">
+      <UniqueIdentifier>{3ca84c1c-8408-4dff-ad0a-9a9cade567bf}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\config">
+      <UniqueIdentifier>{d098853e-b70f-434d-8f82-fc97a0778d26}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\vs">
+      <UniqueIdentifier>{f6f14966-0cc4-42fd-b667-ad7318801de7}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\vs">
+      <UniqueIdentifier>{1858bcf8-1b53-4937-8699-4d7e98174b27}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\etl">
+      <UniqueIdentifier>{2db82227-c77f-4f98-80e8-d0c6123d48f0}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\etl">
+      <UniqueIdentifier>{725dc6c9-5efb-4320-b844-f59744d11327}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="stdafx.h">
+      <Filter>Header Files\vs</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\ampp\macros\autolink_template.h">
+      <Filter>Header Files\macros</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\ampp\precompile.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\ampp\ampp.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\ampp\config\autolink.h">
+      <Filter>Header Files\config</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\etl\trace_format_data_impl.h">
+      <Filter>Source Files\etl</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\etl\trace_format_impl.h">
+      <Filter>Source Files\etl</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\etl\trace_util.h">
+      <Filter>Source Files\etl</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\etl\string_util.h">
+      <Filter>Source Files\etl</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\ampp\etl\guid_util.h">
+      <Filter>Header Files\etl</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\ampp\etl\pdb_provider.h">
+      <Filter>Header Files\etl</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\ampp\etl\time_util.h">
+      <Filter>Header Files\etl</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\ampp\etl\trace_base.h">
+      <Filter>Header Files\etl</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\ampp\etl\trace_enumerator.h">
+      <Filter>Header Files\etl</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\ampp\etl\trace_event_data.h">
+      <Filter>Header Files\etl</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="stdafx.cpp">
+      <Filter>Source Files\vs</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\etl\trace_format_impl.cpp">
+      <Filter>Source Files\etl</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\etl\trace_util.cpp">
+      <Filter>Source Files\etl</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\etl\guid_util.cpp">
+      <Filter>Source Files\etl</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\etl\pdb_provider.cpp">
+      <Filter>Source Files\etl</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\etl\string_util.cpp">
+      <Filter>Source Files\etl</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\etl\time_util.cpp">
+      <Filter>Source Files\etl</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\etl\trace_enumerator.cpp">
+      <Filter>Source Files\etl</Filter>
+    </ClCompile>
+  </ItemGroup>
+</Project>
