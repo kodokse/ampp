@@ -121,32 +121,30 @@ bool ParseFormatLine(const wchar_t *fmtLine, std::wstring &fmtString, ConfigMap 
 
 BOOL CALLBACK Check64BitEnumerator(PSYMBOL_INFOW pSymInfo, ULONG SymbolSize, PVOID UserContext)
 {
-	auto context = reinterpret_cast<TraceContext *>(UserContext);
-	if (pSymInfo->Name == NULL ||
-		pSymInfo->Size != 8 ||
-		pSymInfo->Tag != SymTagTypedef)
-	{
-		return TRUE;
-	}
-	if (wcscmp(pSymInfo->Name, L"PVOID") == 0 ||
+  auto context = reinterpret_cast<TraceContext *>(UserContext);
+  if (pSymInfo->Name == NULL || pSymInfo->Size != 8 || pSymInfo->Tag != SymTagTypedef)
+  {
+    return TRUE;
+  }
+  if (wcscmp(pSymInfo->Name, L"PVOID") == 0 ||
       wcscmp(pSymInfo->Name, L"ULONG_PTR") == 0 ||
       wcscmp(pSymInfo->Name, L"DWORD_PTR") == 0 ||
       wcscmp(pSymInfo->Name, L"UINT_PTR") == 0 ||
       wcscmp(pSymInfo->Name, L"PBYTE") == 0 ||
       wcscmp(pSymInfo->Name, L"HANDLE") == 0)
-	{
-		context->is64Bit = true;
-		return FALSE;
-	}
+  {
+    context->is64Bit = true;
+    return FALSE;
+  }
 	return TRUE;
 }
 
 BOOL CALLBACK TraceLogEnumerator(PSYMBOL_INFOW pSymInfo, ULONG SymbolSize, PVOID UserContext)
 {
-	if (pSymInfo->Name == NULL)
-	{
-		return TRUE;
-	}
+  if (pSymInfo->Name == NULL)
+  {
+    return TRUE;
+  }
   auto context = reinterpret_cast<TraceContext *>(UserContext);
   const wchar_t *name = pSymInfo->Name;
   const auto endName = name + pSymInfo->NameLen;
@@ -227,7 +225,7 @@ BOOL CALLBACK TraceLogEnumerator(PSYMBOL_INFOW pSymInfo, ULONG SymbolSize, PVOID
   {
     std::wcout << "LOG: " << name << std::endl;
   }
-	return TRUE;
+  return TRUE;
 }
 
 } // private namespace
@@ -248,31 +246,31 @@ ProviderCallback PdbProvider::Provide(const fs::path &pdbPath) const
 {
   return [this, pdbPath](const TraceFormatAddCallback &adder)
   {
-	  std::error_code errorCode;
-	  const auto fileSize = fs::file_size(pdbPath, errorCode);
-	  if (errorCode)
-	  {
-		  return false;
-	  }
+    std::error_code errorCode;
+    const auto fileSize = fs::file_size(pdbPath, errorCode);
+    if (errorCode)
+    {
+      return false;
+    }
     std::vector<std::uint8_t> fileData(fileSize);
-	  AutoSymModule moduleBase(process_, SymLoadModuleExW(process_, NULL, pdbPath.c_str(), pdbPath.stem().c_str(), reinterpret_cast<DWORD64>(&fileData[0]), fileData.size(), nullptr, 0));
-	  if (moduleBase.Get() == 0)
-	  {
-		  return false;
-	  }
+    AutoSymModule moduleBase(process_, SymLoadModuleExW(process_, NULL, pdbPath.c_str(), pdbPath.stem().c_str(), reinterpret_cast<DWORD64>(&fileData[0]), fileData.size(), nullptr, 0));
+    if (moduleBase.Get() == 0)
+    {
+      return false;
+    }
     TraceContext context;
     //context.collection = &collection_;
     context.addFmt = adder;
     context.process = process_;
-	  if(!SymEnumTypesW(process_, moduleBase.Get(), Check64BitEnumerator, &context))
+    if(!SymEnumTypesW(process_, moduleBase.Get(), Check64BitEnumerator, &context))
     {
       return false;
     }
-	  if(!SymSearchW(process_, moduleBase.Get(), 0, SymTagAnnotation, nullptr, 0, TraceLogEnumerator, &context, SYMSEARCH_RECURSE))
+    if(!SymSearchW(process_, moduleBase.Get(), 0, SymTagAnnotation, nullptr, 0, TraceLogEnumerator, &context, SYMSEARCH_RECURSE))
     {
       return false;
     }
-	  return true;
+    return true;
   };
 }
 
