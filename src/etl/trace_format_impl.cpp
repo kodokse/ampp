@@ -1,7 +1,7 @@
 #include "stdafx.h"
 #include "trace_format_impl.h"
 
-namespace etl_lib
+namespace etl
 {
 
 TraceFormat::TraceFormat()
@@ -13,5 +13,5 @@ TraceFormat::TraceFormat()
 {
 }
 
-} // namespace etl_lib
+} // namespace etl
 

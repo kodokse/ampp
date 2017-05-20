@@ -1,6 +1,6 @@
 #pragma once
 
-namespace etl_lib
+namespace etl
 {
 
 class GuidLess
@@ -18,5 +18,5 @@ using GuidKeyedMap = std::map<GUID, V, GuidLess>;
 bool GuidFromString(const std::wstring &s, GUID *outGuid);
 std::wstring GuidToString(const GUID &g);
 
-} // namespace etl_lib
+} // namespace etl
 

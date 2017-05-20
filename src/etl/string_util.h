@@ -1,6 +1,6 @@
 #pragma once
 
-namespace etl_lib
+namespace etl
 {
 
 std::vector<std::wstring> Split(const wchar_t *&s, const wchar_t *end, wchar_t ch);
@@ -96,5 +96,5 @@ bool ParseInt(CIterT &cur, const CIterT &end, IntT &val, int radix)
   return true;
 }
 
-} // namespace etl_lib
+} // namespace etl
 

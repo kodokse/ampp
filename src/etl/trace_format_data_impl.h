@@ -1,6 +1,6 @@
 #pragma once
 
-namespace etl_lib
+namespace etl
 {
 
 struct TraceFormatData
@@ -31,5 +31,5 @@ struct TraceFormatData
   }
 };
 
-} // namespace etl_lib
+} // namespace etl
 

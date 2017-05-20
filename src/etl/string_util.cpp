@@ -1,7 +1,7 @@
 #include "stdafx.h"
 #include "string_util.h"
 
-namespace etl_lib
+namespace etl
 {
 
 std::vector<std::wstring> Split(const wchar_t *&s, const wchar_t *end, wchar_t ch)
@@ -152,5 +152,5 @@ void SkipUntil(const wchar_t *&fmtLine, const wchar_t *endFmtLine, wchar_t ch)
   }
 }
 
-} // namespace etl_lib
+} // namespace etl
 

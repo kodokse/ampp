@@ -1,6 +1,6 @@
 #pragma once
 
-namespace etl_lib
+namespace etl
 {
 
 struct TraceEventData
@@ -35,5 +35,5 @@ inline TraceEventDataItem &operator++(TraceEventDataItem &item)
   return item;
 }
 
-} // namespace etl_lib
+} // namespace etl
 

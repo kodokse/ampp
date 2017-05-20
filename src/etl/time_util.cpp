@@ -1,7 +1,7 @@
 #include "stdafx.h"
 #include <ampp/etl/time_util.h>
 
-namespace etl_lib
+namespace etl
 {
 
 namespace
@@ -71,5 +71,5 @@ std::wstring FormatFileTime(const wchar_t *fmt, const FILETIME &ft)
   return rv;
 }
 
-} // namespace etl_lib
+} // namespace etl
 

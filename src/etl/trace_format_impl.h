@@ -1,6 +1,6 @@
 #pragma once
 
-namespace etl_lib
+namespace etl
 {
 
 using ConfigMap = std::map<std::wstring, std::wstring>;
@@ -32,5 +32,5 @@ struct TraceFormat
   TraceFormat();
 };
 
-} // namespace etl_lib
+} // namespace etl
 

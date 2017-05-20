@@ -23,6 +23,7 @@
 
 #include <vector>
 #include <map>
+#include <set>
 #include <list>
 #include <string>
 #include <cstdint>
@@ -31,6 +32,7 @@
 #include <iostream>
 #include <filesystem>
 #include <functional>
+#include <thread>
 
 #ifndef AMPP_INTERNAL_BUILD
 #include <ampp/config/autolink.h>

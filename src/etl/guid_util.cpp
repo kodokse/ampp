@@ -3,7 +3,7 @@
 
 using namespace std::string_literals;
 
-namespace etl_lib
+namespace etl
 {
 
 bool GuidFromString(const std::wstring &s, GUID *outGuid)
@@ -30,5 +30,5 @@ std::wstring GuidToString(const GUID &g)
   return rv;
 }
 
-} // namespace etl_lib
+} // namespace etl
 

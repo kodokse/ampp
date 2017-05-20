@@ -1,19 +1,22 @@
 #pragma once
-#include "trace_base.h"
+#include <ampp/etl/trace_base.h>
 
-namespace etl_lib
+namespace etl
 {
 
-class PdbProvider
+class PdbFileManager;
+
+class PdbProvider : public TraceProvider
 {
+  class Impl;
 public:
-  PdbProvider();
+  PdbProvider(const PdbFileManager &fm, const fs::path &pdbFile);
   ~PdbProvider();
-  ProviderCallback Provide(const fs::path &pdbPath) const;
+  //ProviderEnumerator Provide(const fs::path &pdbPath) const;
+  bool EnumerateTraces(const SourceFileCallback &, const TraceGuidCallback &) const override;
 private:
-  fs::path pdbPath_;
-  HANDLE process_;
+  std::unique_ptr<Impl> impl_;
 };
 
-} // namespace etl_lib
+} // namespace etl
 

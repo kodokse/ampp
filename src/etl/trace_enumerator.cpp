@@ -1,4 +1,5 @@
 #include "stdafx.h"
+#define INITGUID
 #include <ampp/etl/trace_enumerator.h>
 #include <ampp/etl/time_util.h>
 #include <ampp/etl/guid_util.h>
@@ -6,7 +7,6 @@
 #include "trace_util.h"
 #include "trace_format_impl.h"
 
-#define INITGUID
 #include <Evntrace.h>
 
 using namespace std::string_literals;
@@ -43,12 +43,21 @@ void Observable::NotifyObservers() const
 }
 
 
-namespace etl_lib
+namespace etl
 {
 
 #pragma pack(push, 1)
-struct MOF_DATA
+struct MOF_DATA_FILE
 {
+  GUID  sourceFileGUID;
+  FILETIME timeStamp;
+  DWORD threadId;
+  DWORD processId;
+  BYTE  *params;
+};
+struct MOF_DATA_LIVE
+{
+  DWORD sequenceId;
   GUID  sourceFileGUID;
   FILETIME timeStamp;
   DWORD threadId;
@@ -68,30 +77,72 @@ struct SourceFile
 class FormatDatabase::Impl : public Observable
 {
 public:
-  bool AddSourceFileTrace(const GUID &fileGuid, const TraceFormat &fmt);
-  void SetSourceFilePath(const GUID &fileGuid, const fs::path &filePath);
+  void AddProvider(const GUID &fileGuid, const ProviderCallback &provider);
   const TraceFormat *FindTrace(const GUID &fileGuid, DWORD traceIdx) const;
   fs::path GetSourceFile(const GUID &fileGuid) const;
+  void AddTraceGuid(const GUID &traceGuid, const wchar_t *traceName);
+  std::vector<GUID> GetTraceProviderGuids() const;
 private:
-  GuidKeyedMap<std::unique_ptr<SourceFile>> sourceFiles_;
+  const TraceFormat *FindTraceInternal(const GUID &fileGuid, DWORD traceIdx) const;
+  void InvokeProvider(const GUID &fileGuid) const;
+  bool AddSourceFileTrace(const GUID &fileGuid, const TraceFormat &fmt) const;
+  void SetSourceFilePath(const GUID &fileGuid, const fs::path &filePath) const;
+private:
+  mutable GuidKeyedMap<std::unique_ptr<SourceFile>> sourceFiles_;
+  GuidKeyedMap<ProviderCallback> providers_;
+  GuidKeyedMap<std::wstring> traces_;
 };
 
 
 //////////////////////////////
 
-bool FormatDatabase::Impl::AddSourceFileTrace(const GUID &fileGuid, const TraceFormat &fmt)
+void FormatDatabase::Impl::AddProvider(const GUID &fileGuid, const ProviderCallback &provider)
+{
+  providers_[fileGuid] = provider;
+}
+
+bool FormatDatabase::Impl::AddSourceFileTrace(const GUID &fileGuid, const TraceFormat &fmt) const
 {
   auto it = sourceFiles_.emplace(fileGuid, std::make_unique<SourceFile>());
   it.first->second->traceEvents[fmt.traceIndex] = std::make_unique<TraceFormat>(fmt);
   return it.second;
 }
 
-void FormatDatabase::Impl::SetSourceFilePath(const GUID &fileGuid, const fs::path &filePath)
+void FormatDatabase::Impl::SetSourceFilePath(const GUID &fileGuid, const fs::path &filePath) const
 {
   sourceFiles_[fileGuid]->filePath = filePath;
 }
 
 const TraceFormat *FormatDatabase::Impl::FindTrace(const GUID &fileGuid, DWORD traceIdx) const
+{
+  auto rv = FindTraceInternal(fileGuid, traceIdx);
+  if (rv)
+  {
+    return rv;
+  }
+  InvokeProvider(fileGuid);
+  return FindTraceInternal(fileGuid, traceIdx);
+}
+
+void FormatDatabase::Impl::InvokeProvider(const GUID &fileGuid) const
+{
+  auto it = providers_.find(fileGuid);
+  if (it != providers_.end())
+  {
+    if(it->second([this](const GUID &fileGuid, const wchar_t *fileName, TraceFormat &&traceFormat)
+    {
+      if (AddSourceFileTrace(fileGuid, std::move(traceFormat)))
+      {
+        SetSourceFilePath(fileGuid, fileName);
+      }
+    }))
+    {
+      NotifyObservers();
+    }
+  }
+}
+
+const TraceFormat *FormatDatabase::Impl::FindTraceInternal(const GUID &fileGuid, DWORD traceIdx) const
 {
   auto sit = sourceFiles_.find(fileGuid);
   if(sit == sourceFiles_.end())
@@ -116,6 +167,22 @@ fs::path FormatDatabase::Impl::GetSourceFile(const GUID &fileGuid) const
   return sit->second->filePath;
 }
 
+void FormatDatabase::Impl::AddTraceGuid(const GUID &traceGuid, const wchar_t *traceName)
+{
+  //std::wcout << L"Got GUID: " << GuidToString(traceGuid) << std::endl;
+  traces_[traceGuid] = traceName ? traceName : L"";
+}
+
+std::vector<GUID> FormatDatabase::Impl::GetTraceProviderGuids() const
+{
+  std::vector<GUID> rv;
+  for (auto &&kv : traces_)
+  {
+    rv.push_back(kv.first);
+  }
+  return rv;
+}
+
 ////////////////////////////////////
 
 FormatDatabase::FormatDatabase()
@@ -125,8 +192,16 @@ FormatDatabase::FormatDatabase()
 
 FormatDatabase::~FormatDatabase(){}
 
-void FormatDatabase::AddProvider(const ProviderCallback &prov)
+void FormatDatabase::AddProvider(const TraceProvider &provEnum)
 {
+  provEnum.EnumerateTraces([this](const GUID &fileGuid, const ProviderCallback &prov)
+  {
+    impl_->AddProvider(fileGuid, prov);
+  }, [this](const GUID &traceGuid, const wchar_t *traceName)
+  {
+    impl_->AddTraceGuid(traceGuid, traceName);
+  });
+  /*
   if(prov([this](const GUID &fileGuid, PWSTR fileName, TraceFormat &&traceFormat)
   {
     if(impl_->AddSourceFileTrace(fileGuid, std::move(traceFormat)))
@@ -137,6 +212,7 @@ void FormatDatabase::AddProvider(const ProviderCallback &prov)
   {
     impl_->NotifyObservers();
   }
+  */
 }
 
 void FormatDatabase::AddObserver(Observer *o) const
@@ -157,6 +233,11 @@ const TraceFormat *FormatDatabase::FindTrace(const GUID &fileGuid, DWORD traceId
 fs::path FormatDatabase::GetSourceFile(const GUID &fileGuid) const
 {
   return impl_->GetSourceFile(fileGuid);
+}
+
+std::vector<GUID> FormatDatabase::GetTraceProviderGuids() const
+{
+  return impl_->GetTraceProviderGuids();
 }
 
 ///////////////////////////////////////////
@@ -237,7 +318,9 @@ public:
   const wchar_t *GetItemValue(size_t index, TraceEventDataItem item, size_t *valueLength) const;
   const std::wstring &GetItemValue(size_t index, TraceEventDataItem item) const;
   void ApplyFilters();
+  template <class MofType>
   static void CALLBACK EventCallback(PEVENT_TRACE pEvent);
+  std::vector<GUID> GetTraceGuids() const;
   //
   void Notify(const Observable *o) override;
 private:
@@ -263,6 +346,11 @@ TraceEnumerator::Impl::Impl(const FormatDatabase *db)
 TraceEnumerator::Impl::~Impl()
 {
   db_->RemoveObserver(this);
+}
+
+std::vector<GUID> TraceEnumerator::Impl::GetTraceGuids() const
+{
+  return db_->GetTraceProviderGuids();
 }
 
 void TraceEnumerator::Impl::Notify(const Observable *o)
@@ -337,6 +425,7 @@ bool TraceEnumerator::Impl::GenerateLogEntry(const GUID &fileGuid, DWORD traceId
   auto traceFmt = db_->FindTrace(fileGuid, traceId);
   if(!traceFmt)
   {
+    std::wcout << L"No trace found!" << std::endl;
     return false;
   }
   TraceFormatData fmtData {params, paramLen};
@@ -385,24 +474,28 @@ void TraceEnumerator::Impl::ApplyFilters()
   }
 }
 
+template <class MofType>
 void CALLBACK TraceEnumerator::Impl::EventCallback(PEVENT_TRACE pEvent)
 {
   if(pEvent->MofData == NULL)
   {
+    std::wcout << L"No MOF!" << std::endl;
     return;
   }
   if(pEvent->Header.Guid == EventTraceGuid)
   {
+    std::wcout << L"EventTraceGuid!" << std::endl;
     return;
   }
   auto context = g_thread_enum;
   if(!context)
   {
+    std::wcout << L"No Context!" << std::endl;
     return;
   }
-  auto mofData = reinterpret_cast<MOF_DATA *>(pEvent->MofData);
+  auto mofData = reinterpret_cast<MofType *>(pEvent->MofData);
   DWORD traceId = LOWORD(pEvent->Header.Version);
-  context->allTraces_.push_back(std::make_unique<TraceEventItem>(mofData->sourceFileGUID, context->startTime_ + mofData->timeStamp, traceId, mofData->processId, mofData->threadId, context->allTraces_.size(), &mofData->params, pEvent->MofLength));
+  context->allTraces_.push_back(std::make_unique<TraceEventItem>(mofData->sourceFileGUID, context->startTime_ + mofData->timeStamp, traceId, mofData->processId, mofData->threadId, static_cast<DWORD>(context->allTraces_.size()), &mofData->params, pEvent->MofLength));
   context->EvaluateItem(*context->allTraces_.back());
   if(context->TestFilters(*context->allTraces_.back()))
   {
@@ -411,6 +504,11 @@ void CALLBACK TraceEnumerator::Impl::EventCallback(PEVENT_TRACE pEvent)
   if(context->countCallback_)
   {
     context->countCallback_(context->filteredTraceEvents_.size());
+  }
+  if (context->logger_)
+  {
+    std::wcout << L"Generating log!" << std::endl;
+    context->GenerateLogEntry(mofData->sourceFileGUID, traceId, context->startTime_ + mofData->timeStamp, mofData->processId, mofData->threadId, &mofData->params, pEvent->MofLength);
   }
 }
 
@@ -473,13 +571,13 @@ LogfileEnumerator::LogfileEnumerator(const FormatDatabase &db, const fs::path &l
 
 bool LogfileEnumerator::Start()
 {
-  EVENT_TRACE_LOGFILE traceFile;
+  EVENT_TRACE_LOGFILEW traceFile;
   ZeroMemory(&traceFile, sizeof(traceFile));
   g_thread_enum = impl_.get();
-  traceFile.EventCallback = Impl::EventCallback;
+  traceFile.EventCallback = Impl::EventCallback<MOF_DATA_FILE>;
   traceFile.LogFileMode = EVENT_TRACE_FILE_MODE_NONE;
   traceFile.LogFileName = const_cast<LPWSTR>(logPath_.c_str());
-  auto traceHandle = OpenTrace(&traceFile);
+  auto traceHandle = OpenTraceW(&traceFile);
   if(traceHandle == (TRACEHANDLE)INVALID_HANDLE_VALUE)
   {
     return false;
@@ -493,6 +591,102 @@ void LogfileEnumerator::Stop()
 {
 }
 
-} // namespace etl_lib
+////////////////////////
+
+LiveTraceEnumerator::LiveTraceEnumerator(const FormatDatabase &db, const std::wstring &sessionName)
+  : TraceEnumerator(db)
+  , sessionName_(sessionName)
+{
+}
+
+void LiveTraceEnumerator::InitSession()
+{
+  traceBuffer_.resize((sessionName_.length() + 1) * sizeof(wchar_t) + sizeof(EVENT_TRACE_PROPERTIES));
+  auto traceProps = reinterpret_cast<EVENT_TRACE_PROPERTIES *>(&traceBuffer_[0]);
+  traceProps->Wnode.BufferSize = static_cast<ULONG>(traceBuffer_.size());
+  CoCreateGuid(&traceProps->Wnode.Guid);
+  traceProps->Wnode.ClientContext = 2;
+  traceProps->Wnode.Flags = WNODE_FLAG_TRACED_GUID;
+  traceProps->FlushTimer = 1;
+  traceProps->LogFileMode = EVENT_TRACE_USE_LOCAL_SEQUENCE | EVENT_TRACE_REAL_TIME_MODE;
+  traceProps->LoggerNameOffset = sizeof(EVENT_TRACE_PROPERTIES);
+}
+
+bool LiveTraceEnumerator::Start()
+{
+  InitSession();
+  EVENT_TRACE_LOGFILEW traceFile;
+  ZeroMemory(&traceFile, sizeof(traceFile));
+  traceFile.LoggerName = const_cast<wchar_t *>(sessionName_.c_str());
+
+  traceFile.EventCallback = Impl::EventCallback<MOF_DATA_LIVE>;
+  traceFile.LogFileMode = EVENT_TRACE_REAL_TIME_MODE;
+  traceFile.LogfileHeader.LogFileMode = EVENT_TRACE_REAL_TIME_MODE;
+  //traceFile.LogFileName = GetSessionName();
+  auto traceProps = reinterpret_cast<EVENT_TRACE_PROPERTIES *>(&traceBuffer_[0]);
+  traceHandle_ = (TRACEHANDLE)INVALID_HANDLE_VALUE;
+  auto status = StartTraceW(&traceHandle_, sessionName_.c_str(), traceProps);
+  if (status == ERROR_ALREADY_EXISTS)
+  {
+    Stop();
+    InitSession();
+    status = StartTraceW(&traceHandle_, sessionName_.c_str(), traceProps);
+  }
+  if (traceHandle_ == (TRACEHANDLE)INVALID_HANDLE_VALUE)
+  {
+    return false;
+  }
+  auto traceGuids = impl_->GetTraceGuids();
+  for (auto &&tg : traceGuids)
+  {
+    std::wcout << L"Enabling trace for " << GuidToString(tg) << std::endl;
+    EnableTrace(TRUE, 0xFFFFFFFF, TRACE_LEVEL_INFORMATION, &tg, traceHandle_);
+    //EnableTraceEx2(traceHandle_, &tg, EVENT_CONTROL_CODE_ENABLE_PROVIDER, TRACE_LEVEL_INFORMATION, 0, 0, 0, );
+  }
+  FILETIME now;
+  GetSystemTimeAsFileTime(&now);
+  impl_->SetStartTime(now);
+  TRACEHANDLE openTraceHandle = OpenTraceW(&traceFile);
+  processor_ = std::make_unique<std::thread>([this, &openTraceHandle]()
+  {
+    g_thread_enum = impl_.get();
+    ProcessTrace(&openTraceHandle, 1, NULL, NULL);
+  });
+  return true;
+}
+
+void LiveTraceEnumerator::Stop()
+{
+  auto traceProps = reinterpret_cast<EVENT_TRACE_PROPERTIES *>(&traceBuffer_[0]);
+  ControlTraceW(traceHandle_, GetSessionName(), traceProps, EVENT_TRACE_CONTROL_STOP);
+  if (processor_ && processor_->joinable())
+  {
+    processor_->join();
+    processor_.reset();
+  }
+}
+
+const wchar_t *LiveTraceEnumerator::GetSessionName() const
+{
+  //if (traceBuffer_.empty())
+  //{
+  //  return nullptr;
+  //}
+  //auto traceProps = reinterpret_cast<const EVENT_TRACE_PROPERTIES *>(&traceBuffer_[0]);
+  //return reinterpret_cast<const wchar_t *>(&traceBuffer_[traceProps->LoggerNameOffset]);
+  return sessionName_.c_str();
+}
+
+//wchar_t *LiveTraceEnumerator::GetSessionName()
+//{
+//  if (traceBuffer_.empty())
+//  {
+//    return nullptr;
+//  }
+//  auto traceProps = reinterpret_cast<EVENT_TRACE_PROPERTIES *>(&traceBuffer_[0]);
+//  return reinterpret_cast<wchar_t *>(&traceBuffer_[traceProps->LoggerNameOffset]);
+//}
+
+} // namespace etl
 
 

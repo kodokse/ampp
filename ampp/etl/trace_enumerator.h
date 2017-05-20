@@ -1,4 +1,5 @@
 #pragma once
+#include <Evntrace.h>
 #include "trace_event_data.h"
 #include "trace_base.h"
 
@@ -22,7 +23,7 @@ private:
   mutable std::list<Observer *> observers_;
 };
 
-namespace etl_lib
+namespace etl
 {
 
 class FormatDatabase
@@ -32,11 +33,12 @@ public:
 public:
   FormatDatabase();
   ~FormatDatabase();
-  void AddProvider(const ProviderCallback &prov);
+  void AddProvider(const TraceProvider &prov);
   void AddObserver(Observer *o) const;
   void RemoveObserver(Observer *o) const;
   const TraceFormat *FindTrace(const GUID &fileGuid, DWORD traceIdx) const;
   fs::path GetSourceFile(const GUID &fileGuid) const;
+  std::vector<GUID> GetTraceProviderGuids() const;
 private:
   std::unique_ptr<Impl> impl_;
 };
@@ -74,5 +76,22 @@ private:
   fs::path logPath_;
 };
 
-} // namespace etl_lib
+class LiveTraceEnumerator : public TraceEnumerator
+{
+public:
+  LiveTraceEnumerator(const FormatDatabase &db, const std::wstring &sessionName);
+  bool Start() override;
+  void Stop() override;
+private:
+  void InitSession();
+  const wchar_t *GetSessionName() const;
+  //wchar_t *GetSessionName();
+private:
+  std::wstring sessionName_;
+  std::vector<char> traceBuffer_;
+  TRACEHANDLE traceHandle_;
+  std::unique_ptr<std::thread> processor_;
+};
+
+} // namespace etl
 

@@ -297,6 +297,7 @@
     <ClInclude Include="..\..\ampp\ampp.h" />
     <ClInclude Include="..\..\ampp\config\autolink.h" />
     <ClInclude Include="..\..\ampp\etl\guid_util.h" />
+    <ClInclude Include="..\..\ampp\etl\pdb_file.h" />
     <ClInclude Include="..\..\ampp\etl\pdb_provider.h" />
     <ClInclude Include="..\..\ampp\etl\time_util.h" />
     <ClInclude Include="..\..\ampp\etl\trace_base.h" />
@@ -312,6 +313,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\src\etl\guid_util.cpp" />
+    <ClCompile Include="..\..\src\etl\pdb_file.cpp" />
     <ClCompile Include="..\..\src\etl\pdb_provider.cpp" />
     <ClCompile Include="..\..\src\etl\string_util.cpp" />
     <ClCompile Include="..\..\src\etl\time_util.cpp" />

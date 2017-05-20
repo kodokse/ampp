@@ -5,7 +5,7 @@
 #include "trace_format_impl.h"
 #include "trace_format_data_impl.h"
 
-namespace etl_lib
+namespace etl
 {
 
 namespace
@@ -193,5 +193,5 @@ std::wstring FormatTraceFormat(const TraceFormat &fmt, TraceFormatData data)
   return rv;
 }
 
-} // namespace etl_lib
+} // namespace etl
 

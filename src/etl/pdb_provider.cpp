@@ -2,16 +2,24 @@
 #include <DbgHelp.h>
 #include <ampp/etl/pdb_provider.h>
 #include <ampp/etl/guid_util.h>
+#include <ampp/etl/pdb_file.h>
 #include "string_util.h"
 #include "trace_format_impl.h"
 
 #pragma comment(lib, "dbghelp.lib")
 
-namespace etl_lib
+namespace etl
 {
 
 namespace
 {
+
+using PdbEnumCallback = std::function<bool(PSYMBOL_INFOW pSymInfo, ULONG SymbolSize)>;
+
+struct PdbEnumeratorContext
+{
+  PdbEnumCallback enumFun;
+};
 
 struct TraceContext
 {
@@ -119,6 +127,7 @@ bool ParseFormatLine(const wchar_t *fmtLine, std::wstring &fmtString, ConfigMap 
   return true;
 }
 
+/*
 BOOL CALLBACK Check64BitEnumerator(PSYMBOL_INFOW pSymInfo, ULONG SymbolSize, PVOID UserContext)
 {
   auto context = reinterpret_cast<TraceContext *>(UserContext);
@@ -136,8 +145,19 @@ BOOL CALLBACK Check64BitEnumerator(PSYMBOL_INFOW pSymInfo, ULONG SymbolSize, PVO
     context->is64Bit = true;
     return FALSE;
   }
-	return TRUE;
+  return TRUE;
 }
+
+BOOL CALLBACK PdbEnumerator(PSYMBOL_INFOW pSymInfo, ULONG SymbolSize, PVOID UserContext)
+{
+  if (pSymInfo->Name == NULL)
+  {
+    return TRUE;
+  }
+  auto context = reinterpret_cast<PdbEnumeratorContext *>(UserContext);
+  return context->enumFun(pSymInfo, SymbolSize) ? TRUE : FALSE;
+}
+
 
 BOOL CALLBACK TraceLogEnumerator(PSYMBOL_INFOW pSymInfo, ULONG SymbolSize, PVOID UserContext)
 {
@@ -227,52 +247,234 @@ BOOL CALLBACK TraceLogEnumerator(PSYMBOL_INFOW pSymInfo, ULONG SymbolSize, PVOID
   }
   return TRUE;
 }
+*/
 
 } // private namespace
 
+
 ///////////////////
 
-PdbProvider::PdbProvider()
-  : process_(GetCurrentProcess())
+class PdbProvider::Impl
 {
-  SymInitializeW(process_, L"", FALSE);
-}
-PdbProvider::~PdbProvider()
+public:
+  Impl(const PdbFileManager &fm, const fs::path &pdbPath);
+  ~Impl();
+  //ProviderEnumerator Provide(const fs::path &pdbPath) const;
+  bool EnumerateTraces(const SourceFileCallback &sourceFileCb, const TraceGuidCallback &traceGuidCb) const;
+private:
+  bool ProvideForPdbFile(const SourceFileCallback &sourceFileCb, const TraceGuidCallback &traceGuidCb, const fs::path &pdbPath) const;
+private:
+  bool EnumerateTrace(const PdbSymbol &sym, Architecture arch, const TraceFormatAddCallback &adder) const;
+private:
+  const PdbFileManager &fm_;
+  fs::path pdbPath_;
+};
+
+//////////////////
+
+PdbProvider::Impl::Impl(const PdbFileManager &fm, const fs::path &pdbPath)
+  : fm_(fm)
+  , pdbPath_(pdbPath)
 {
-  SymCleanup(process_);
+  //SymInitializeW(process_, L"", FALSE);
 }
 
-ProviderCallback PdbProvider::Provide(const fs::path &pdbPath) const
+PdbProvider::Impl::~Impl()
 {
-  return [this, pdbPath](const TraceFormatAddCallback &adder)
+  //SymCleanup(process_);
+}
+
+bool PdbProvider::Impl::EnumerateTrace(const PdbSymbol &sym, Architecture arch, const TraceFormatAddCallback &adder) const
+{
+  const wchar_t *name = sym.Descriptor();
+  const auto endName = name + sym.DescriptorLength();
+  if (wcscmp(name, L"TMF:") == 0)
   {
-    std::error_code errorCode;
-    const auto fileSize = fs::file_size(pdbPath, errorCode);
-    if (errorCode)
+    TraceFormat traceFormat;
+
+    traceFormat.function = sym.Name();
+    traceFormat.lineNumber = sym.LineNumber();
+    traceFormat.fileInfoFlags = arch ==  Architecture::X64 ? FIF_64BIT_TRACE : FIF_32BIT_TRACE;
+
+    auto modInfo = AdvanceString(name);
+    auto modData = Split(modInfo, nullptr, L' ');
+    GUID fileGuid;
+    GuidFromString(modData[0], &fileGuid);
+    traceFormat.moduleName = modData[1];
+    auto fmtInfo = AdvanceString(modInfo);
+    ParseFormatLine(fmtInfo, traceFormat.formatString, traceFormat.traceCfg, traceFormat.traceIndex);
+    auto str = AdvanceStringUntilAfter(fmtInfo, endName, L"{");
+    while (str < endName && wcscmp(str, L"}") != 0)
     {
-      return false;
+      auto typeInfo = Split(str, endName, L", ");
+      TypeValue tv;
+      tv.argName = typeInfo[0];
+      auto tid = Split(typeInfo[1], L" -- ");
+      tv.type = tid[0];
+      traceFormat.typeMap.emplace(std::wcstoul(tid[1].c_str(), nullptr, 10), std::move(tv));
+      str = AdvanceString(str);
     }
-    std::vector<std::uint8_t> fileData(fileSize);
-    AutoSymModule moduleBase(process_, SymLoadModuleExW(process_, NULL, pdbPath.c_str(), pdbPath.stem().c_str(), reinterpret_cast<DWORD64>(&fileData[0]), fileData.size(), nullptr, 0));
-    if (moduleBase.Get() == 0)
+    adder(fileGuid, sym.SourceFile(), std::move(traceFormat));
+  }
+  return true;
+}
+
+/*
+bool PdbProvider::Impl::PdbEnumerate(const fs::path &pdbPath, DWORD symTag, const PdbEnumCallback &fun) const
+{
+  std::error_code errorCode;
+  const auto fileSize = fs::file_size(pdbPath, errorCode);
+  if (errorCode)
+  {
+    return false;
+  }
+  std::vector<std::uint8_t> fileData(fileSize);
+  AutoSymModule moduleBase(process_, SymLoadModuleExW(process_, NULL, pdbPath.c_str(), pdbPath.stem().c_str(), reinterpret_cast<DWORD64>(&fileData[0]), fileData.size(), nullptr, 0));
+  if (moduleBase.Get() == 0)
+  {
+    return false;
+  }
+  PdbEnumeratorContext context;
+  context.enumFun = fun;
+  if (!SymSearchW(process_, moduleBase.Get(), 0, symTag, nullptr, 0, PdbEnumerator, &context, SYMSEARCH_RECURSE))
+  {
+    return false;
+  }
+  return true;
+}
+*/
+
+/*
+std::vector<GUID> PdbProvider::Impl::EnumerateSourceFileGuids(const fs::path &pdbPath) const
+{
+  //std::vector<GUID> sourceFileGuids;
+  //PdbEnumerate(pdbPath, SymTagAnnotation, [&sourceFileGuids](PSYMBOL_INFOW pSymInfo, ULONG SymbolSize) -> bool {
+  //  const wchar_t *name = pSymInfo->Name;
+  //  const auto endName = name + pSymInfo->NameLen;
+  //  if (wcscmp(name, L"TMF:") == 0)
+  //  {
+  //    auto modInfo = AdvanceString(name);
+  //    auto modData = Split(modInfo, nullptr, L' ');
+  //    GUID fileGuid;
+  //    if (GuidFromString(modData[0], &fileGuid))
+  //    {
+  //      sourceFileGuids.push_back(fileGuid);
+  //    }
+  //  }
+  //  return true;
+  //});
+  return sourceFileGuids;
+}
+*/
+
+bool PdbProvider::Impl::ProvideForPdbFile(const SourceFileCallback &sourceFileCb, const TraceGuidCallback &traceGuidCb, const fs::path &pdbPath) const
+{
+  std::wcout << L"Loading: " << pdbPath.filename() << L"..." << std::flush;
+  auto pdbFile = fm_.LoadPdb(pdbPath);
+  //if (!pdbFile.Open(pdbPath))
+  if(!pdbFile)
+  {
+    std::wcout << L"FAIL!" << std::endl;
+    return false;
+  }
+  auto traceGuids = pdbFile->GetTraceProviderGuids();
+  for (auto &&tguid : traceGuids)
+  {
+    traceGuidCb(tguid, nullptr);
+  }
+  auto guids = pdbFile->GetSourceFileGuids(); // EnumerateSourceFileGuids(pdbPath);
+  for (auto &&guid : guids)
+  {
+    //traceGuidCb(guid, nullptr);
+    sourceFileCb(guid, [this, pdbPath](const TraceFormatAddCallback &adder)
     {
-      return false;
-    }
-    TraceContext context;
-    //context.collection = &collection_;
-    context.addFmt = adder;
-    context.process = process_;
-    if(!SymEnumTypesW(process_, moduleBase.Get(), Check64BitEnumerator, &context))
+      auto pdbFile = fm_.LoadPdb(pdbPath);
+      if (pdbFile)
+      {
+        pdbFile->EnumerateSymbols(SymTagAnnotation, [this, adder, arch = pdbFile->GetArchitecture()](const PdbSymbol &sym) -> bool
+        {
+          return EnumerateTrace(sym, arch, adder);
+        });
+      }
+      return true;
+    });
+  }
+  std::wcout << L"OK!" << std::endl;
+  return true;
+}
+
+/*
+ProviderEnumerator PdbProvider::Impl::Provide(const fs::path &pdbPath) const
+{
+  return [this, pdbPath](const ProviderEnumeratorCallback &enumCallback) {
+    // for each PDB in path, get the source file GUIDs
+    if (fs::is_regular_file(pdbPath))
     {
-      return false;
+      ProvideForPdbFile(enumCallback, pdbPath);
     }
-    if(!SymSearchW(process_, moduleBase.Get(), 0, SymTagAnnotation, nullptr, 0, TraceLogEnumerator, &context, SYMSEARCH_RECURSE))
+    else if (fs::is_directory(pdbPath))
     {
-      return false;
+      fs::directory_iterator di(pdbPath);
+      fs::directory_iterator end;
+      while (di != end)
+      {
+        if (fs::is_regular_file(di->path()) && di->path().extension().wstring() == L".pdb")
+        {
+          ProvideForPdbFile(enumCallback, di->path());
+        }
+        ++di;
+      }
     }
-    return true;
+    // then for each source file GUID create a callback
   };
 }
+*/
 
-} // namespace etl_lib
+bool PdbProvider::Impl::EnumerateTraces(const SourceFileCallback &sourceFileCb, const TraceGuidCallback &traceGuidCb) const
+{
+  // for each PDB in path, get the source file GUIDs
+  if (fs::is_regular_file(pdbPath_))
+  {
+    return ProvideForPdbFile(sourceFileCb, traceGuidCb, pdbPath_);
+  }
+  else if (fs::is_directory(pdbPath_))
+  {
+    fs::directory_iterator di(pdbPath_);
+    fs::directory_iterator end;
+    bool rv = false;
+    while (di != end)
+    {
+      if (fs::is_regular_file(di->path()) && di->path().extension().wstring() == L".pdb")
+      {
+        rv = ProvideForPdbFile(sourceFileCb, traceGuidCb, di->path()) || rv;
+      }
+      ++di;
+    }
+    return rv;
+  }
+  return false;
+}
+
+///////////////////////
+
+PdbProvider::PdbProvider(const PdbFileManager &fm, const fs::path &pdbFile)
+  : impl_(std::make_unique<PdbProvider::Impl>(fm, pdbFile))
+{
+}
+
+PdbProvider::~PdbProvider()
+{
+}
+
+//ProviderEnumerator PdbProvider::Provide(const fs::path &pdbPath) const
+//{
+//  return impl_->Provide(pdbPath);
+//}
+
+bool PdbProvider::EnumerateTraces(const SourceFileCallback &sourceFileCb, const TraceGuidCallback &traceGuidCb) const
+{
+  return impl_->EnumerateTraces(sourceFileCb, traceGuidCb);
+}
+
+} // namespace etl
 
