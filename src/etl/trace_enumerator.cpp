@@ -290,7 +290,7 @@ struct TraceEventItem
     (*this)[TraceEventDataItem::Function] = traceFmt->function;
     (*this)[TraceEventDataItem::ModuleName] = traceFmt->moduleName;
     (*this)[TraceEventDataItem::LineNumber] = std::to_wstring(traceFmt->lineNumber);
-    (*this)[TraceEventDataItem::SourceFile] = db.GetSourceFile(fileGuid);
+    (*this)[TraceEventDataItem::SourceFile] = db.GetSourceFile(fileGuid).filename();
     (*this)[TraceEventDataItem::Message] = FormatTraceFormat(*traceFmt, fmtData);
     (*this).dataState = DataState::HasData;
     return true;
@@ -625,7 +625,6 @@ bool LiveTraceEnumerator::Start()
   auto traceGuids = impl_->GetTraceGuids();
   for (auto &&tg : traceGuids)
   {
-    std::wcout << L"Enabling trace for " << GuidToString(tg) << std::endl;
     EnableTrace(TRUE, 0xFFFFFFFF, TRACE_LEVEL_INFORMATION, &tg, traceHandle_);
     //EnableTraceEx2(traceHandle_, &tg, EVENT_CONTROL_CODE_ENABLE_PROVIDER, TRACE_LEVEL_INFORMATION, 0, 0, 0, );
   }
