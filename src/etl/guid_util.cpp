@@ -30,5 +30,12 @@ std::wstring GuidToString(const GUID &g)
   return rv;
 }
 
+std::wstring NewGuidAsString()
+{
+  GUID newGuid;
+  CoCreateGuid(&newGuid);
+  return GuidToString(newGuid);
+}
+
 } // namespace etl
 

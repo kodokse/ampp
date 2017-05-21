@@ -99,7 +99,6 @@ private:
 void FormatDatabase::Impl::AddProvider(const GUID &fileGuid, const ProviderCallback &provider)
 {
   providers_[fileGuid] = provider;
-  NotifyObservers();
 }
 
 bool FormatDatabase::Impl::AddSourceFileTrace(const GUID &fileGuid, const TraceFormat &fmt) const
@@ -130,17 +129,14 @@ void FormatDatabase::Impl::InvokeProvider(const GUID &fileGuid) const
   auto it = providers_.find(fileGuid);
   if (it != providers_.end())
   {
-    if(it->second(
+    it->second(
       [this](const GUID &fileGuid, const wchar_t *fileName, TraceFormat &&traceFormat)
       {
         if(AddSourceFileTrace(fileGuid, std::move(traceFormat)))
         {
           SetSourceFilePath(fileGuid, fileName);
         }
-      }))
-    {
-      NotifyObservers();
-    }
+      });
   }
 }
 
@@ -195,15 +191,22 @@ FormatDatabase::~FormatDatabase(){}
 
 void FormatDatabase::AddProvider(const TraceProvider &provEnum)
 {
+  bool addedProvider = false;
   provEnum.EnumerateTraces(
-    [this](const GUID &fileGuid, const ProviderCallback &prov)
+    [this, &addedProvider](const GUID &fileGuid, const ProviderCallback &prov)
     {
       impl_->AddProvider(fileGuid, prov);
+      addedProvider = true;
     },
-    [this](const GUID &traceGuid, const wchar_t *traceName)
+    [this, &addedProvider](const GUID &traceGuid, const wchar_t *traceName)
     {
       impl_->AddTraceGuid(traceGuid, traceName);
+      addedProvider = true;
     });
+  if(addedProvider)
+  {
+    impl_->NotifyObservers();
+  }
 }
 
 void FormatDatabase::AddObserver(Observer *o) const
@@ -312,6 +315,7 @@ public:
   template <class MofType>
   static void CALLBACK EventCallback(PEVENT_TRACE pEvent);
   std::vector<GUID> GetTraceGuids() const;
+  void SetProvidersUpdatedCallback(const std::function<void ()> &pup);
   //
   void Notify(const Observable *o) override;
 private:
@@ -326,6 +330,7 @@ private:
   std::vector<std::unique_ptr<TraceEventItem>> allTraces_;
   std::vector<TraceEventItem *> filteredTraceEvents_;
   std::vector<std::function<bool (TraceEventDataItem item, const std::wstring &value)>> filters_;
+  std::function<void ()> providersUpdated_;
 };
 
 TraceEnumerator::Impl::Impl(const FormatDatabase *db)
@@ -344,6 +349,11 @@ std::vector<GUID> TraceEnumerator::Impl::GetTraceGuids() const
   return db_->GetTraceProviderGuids();
 }
 
+void TraceEnumerator::Impl::SetProvidersUpdatedCallback(const std::function<void()>& pup)
+{
+  providersUpdated_ = pup;
+}
+
 void TraceEnumerator::Impl::Notify(const Observable *o)
 {
   for(auto &&te : allTraces_)
@@ -352,6 +362,10 @@ void TraceEnumerator::Impl::Notify(const Observable *o)
     {
       te->dataState = DataState::NoData;
     }
+  }
+  if(providersUpdated_)
+  {
+    providersUpdated_();
   }
 }
 
@@ -636,6 +650,14 @@ bool LiveTraceEnumerator::Start()
   {
     g_thread_enum = impl_.get();
     ProcessTrace(&openTraceHandle, 1, NULL, NULL);
+  });
+  impl_->SetProvidersUpdatedCallback([this]()
+  {
+    auto traceGuids = impl_->GetTraceGuids();
+    for (auto &&tg : traceGuids)
+    {
+      EnableTrace(TRUE, 0xFFFFFFFF, TRACE_LEVEL_INFORMATION, &tg, traceHandle_);
+    }
   });
   return true;
 }
