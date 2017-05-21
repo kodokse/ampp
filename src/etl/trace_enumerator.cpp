@@ -99,6 +99,7 @@ private:
 void FormatDatabase::Impl::AddProvider(const GUID &fileGuid, const ProviderCallback &provider)
 {
   providers_[fileGuid] = provider;
+  NotifyObservers();
 }
 
 bool FormatDatabase::Impl::AddSourceFileTrace(const GUID &fileGuid, const TraceFormat &fmt) const
@@ -129,13 +130,14 @@ void FormatDatabase::Impl::InvokeProvider(const GUID &fileGuid) const
   auto it = providers_.find(fileGuid);
   if (it != providers_.end())
   {
-    if(it->second([this](const GUID &fileGuid, const wchar_t *fileName, TraceFormat &&traceFormat)
-    {
-      if (AddSourceFileTrace(fileGuid, std::move(traceFormat)))
+    if(it->second(
+      [this](const GUID &fileGuid, const wchar_t *fileName, TraceFormat &&traceFormat)
       {
-        SetSourceFilePath(fileGuid, fileName);
-      }
-    }))
+        if(AddSourceFileTrace(fileGuid, std::move(traceFormat)))
+        {
+          SetSourceFilePath(fileGuid, fileName);
+        }
+      }))
     {
       NotifyObservers();
     }
@@ -169,7 +171,6 @@ fs::path FormatDatabase::Impl::GetSourceFile(const GUID &fileGuid) const
 
 void FormatDatabase::Impl::AddTraceGuid(const GUID &traceGuid, const wchar_t *traceName)
 {
-  //std::wcout << L"Got GUID: " << GuidToString(traceGuid) << std::endl;
   traces_[traceGuid] = traceName ? traceName : L"";
 }
 
@@ -194,25 +195,15 @@ FormatDatabase::~FormatDatabase(){}
 
 void FormatDatabase::AddProvider(const TraceProvider &provEnum)
 {
-  provEnum.EnumerateTraces([this](const GUID &fileGuid, const ProviderCallback &prov)
-  {
-    impl_->AddProvider(fileGuid, prov);
-  }, [this](const GUID &traceGuid, const wchar_t *traceName)
-  {
-    impl_->AddTraceGuid(traceGuid, traceName);
-  });
-  /*
-  if(prov([this](const GUID &fileGuid, PWSTR fileName, TraceFormat &&traceFormat)
-  {
-    if(impl_->AddSourceFileTrace(fileGuid, std::move(traceFormat)))
+  provEnum.EnumerateTraces(
+    [this](const GUID &fileGuid, const ProviderCallback &prov)
     {
-      impl_->SetSourceFilePath(fileGuid, fileName);
-    }
-  }))
-  {
-    impl_->NotifyObservers();
-  }
-  */
+      impl_->AddProvider(fileGuid, prov);
+    },
+    [this](const GUID &traceGuid, const wchar_t *traceName)
+    {
+      impl_->AddTraceGuid(traceGuid, traceName);
+    });
 }
 
 void FormatDatabase::AddObserver(Observer *o) const
@@ -425,7 +416,6 @@ bool TraceEnumerator::Impl::GenerateLogEntry(const GUID &fileGuid, DWORD traceId
   auto traceFmt = db_->FindTrace(fileGuid, traceId);
   if(!traceFmt)
   {
-    std::wcout << L"No trace found!" << std::endl;
     return false;
   }
   TraceFormatData fmtData {params, paramLen};
@@ -479,18 +469,15 @@ void CALLBACK TraceEnumerator::Impl::EventCallback(PEVENT_TRACE pEvent)
 {
   if(pEvent->MofData == NULL)
   {
-    std::wcout << L"No MOF!" << std::endl;
     return;
   }
   if(pEvent->Header.Guid == EventTraceGuid)
   {
-    std::wcout << L"EventTraceGuid!" << std::endl;
     return;
   }
   auto context = g_thread_enum;
   if(!context)
   {
-    std::wcout << L"No Context!" << std::endl;
     return;
   }
   auto mofData = reinterpret_cast<MofType *>(pEvent->MofData);
@@ -507,7 +494,6 @@ void CALLBACK TraceEnumerator::Impl::EventCallback(PEVENT_TRACE pEvent)
   }
   if (context->logger_)
   {
-    std::wcout << L"Generating log!" << std::endl;
     context->GenerateLogEntry(mofData->sourceFileGUID, traceId, context->startTime_ + mofData->timeStamp, mofData->processId, mofData->threadId, &mofData->params, pEvent->MofLength);
   }
 }
@@ -668,24 +654,8 @@ void LiveTraceEnumerator::Stop()
 
 const wchar_t *LiveTraceEnumerator::GetSessionName() const
 {
-  //if (traceBuffer_.empty())
-  //{
-  //  return nullptr;
-  //}
-  //auto traceProps = reinterpret_cast<const EVENT_TRACE_PROPERTIES *>(&traceBuffer_[0]);
-  //return reinterpret_cast<const wchar_t *>(&traceBuffer_[traceProps->LoggerNameOffset]);
   return sessionName_.c_str();
 }
-
-//wchar_t *LiveTraceEnumerator::GetSessionName()
-//{
-//  if (traceBuffer_.empty())
-//  {
-//    return nullptr;
-//  }
-//  auto traceProps = reinterpret_cast<EVENT_TRACE_PROPERTIES *>(&traceBuffer_[0]);
-//  return reinterpret_cast<wchar_t *>(&traceBuffer_[traceProps->LoggerNameOffset]);
-//}
 
 } // namespace etl
 

@@ -245,14 +245,6 @@ bool PdbFile::Open(const fs::path &pdbPath)
   {
     return false;
   }
-  //IMAGEHLP_MODULE64 modInfo = { 0 };
-  //modInfo.SizeOfStruct = sizeof(modInfo);
-  //if (!SymGetModuleInfo64(process_, moduleBase_, &modInfo))
-  //{
-  //  Close();
-  //  return false;
-  //}
-  //arch_ = modInfo.MachineType == IMAGE_FILE_MACHINE_AMD64 ? Architecture::X64 : Architecture::X86;
 
   bool x64 = false;
   EnumerateTypes([&x64](const PdbSymbol &sym) -> bool
@@ -358,6 +350,11 @@ bool PdbFile::EnumerateTypes(const PdbEnumCallback &fun) const
     return false;
   }
   return true;
+}
+
+bool PdbFile::EnumerateAnnotations(const PdbEnumCallback &fun) const
+{
+  return EnumerateSymbols(SymTagAnnotation, fun);
 }
 
 Architecture PdbFile::GetArchitecture() const

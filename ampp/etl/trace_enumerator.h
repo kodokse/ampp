@@ -85,7 +85,6 @@ public:
 private:
   void InitSession();
   const wchar_t *GetSessionName() const;
-  //wchar_t *GetSessionName();
 private:
   std::wstring sessionName_;
   std::vector<char> traceBuffer_;

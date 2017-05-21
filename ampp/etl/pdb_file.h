@@ -29,7 +29,6 @@ private:
   std::unique_ptr<Impl> impl_;
 };
 
-//using PdbEnumCallback = std::function<bool(PSYMBOL_INFOW pSymInfo, ULONG SymbolSize)>;
 using PdbEnumCallback = std::function<bool(const PdbSymbol &sym)>;
 
 class PdbFileManager;
@@ -38,15 +37,13 @@ class PdbFile
 {
   friend class PdbFileManager;
 public:
-  //PdbFile();
-  //PdbFile(const fs::path &pdbPath);
   ~PdbFile();
-  //bool Open(const fs::path &pdbPath);
   void Close();
   std::vector<GUID> GetTraceProviderGuids() const;
   std::vector<GUID> GetSourceFileGuids() const;
   bool EnumerateSymbols(DWORD symTag, const PdbEnumCallback &fun) const;
   bool EnumerateTypes(const PdbEnumCallback &fun) const;
+  bool EnumerateAnnotations(const PdbEnumCallback &fun) const;
   Architecture GetArchitecture() const;
 private:
   PdbFile();
