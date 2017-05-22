@@ -47,15 +47,16 @@ namespace etl
 {
 
 #pragma pack(push, 1)
-struct MOF_DATA_FILE
+struct MofDataFromFile
 {
   GUID  sourceFileGUID;
   FILETIME timeStamp;
   DWORD threadId;
   DWORD processId;
   BYTE  *params;
+  FILETIME GetTimeStamp();
 };
-struct MOF_DATA_LIVE
+struct MofDataLive
 {
   DWORD sequenceId;
   GUID  sourceFileGUID;
@@ -63,8 +64,34 @@ struct MOF_DATA_LIVE
   DWORD threadId;
   DWORD processId;
   BYTE  *params;
+  FILETIME GetTimeStamp();
 };
 #pragma pack(pop)
+
+FILETIME MofDataFromFile::GetTimeStamp()
+{
+  return timeStamp;
+}
+
+FILETIME MofDataLive::GetTimeStamp()
+{
+  static LARGE_INTEGER qpf = { 0 };
+  static LARGE_INTEGER reference = { 0 };
+  if (qpf.QuadPart == 0)
+  {
+    QueryPerformanceFrequency(&qpf);
+  }
+  if (reference.QuadPart == 0)
+  {
+    memcpy(&reference, &timeStamp, sizeof(reference));
+  }
+  LARGE_INTEGER li;
+  memcpy(&li, &timeStamp, sizeof(li));
+  li.QuadPart = ((li.QuadPart - reference.QuadPart) * 1000000) / qpf.QuadPart;
+  FILETIME rv;
+  memcpy(&rv, &li, sizeof(rv));
+  return rv;
+}
 
 struct SourceFile
 {
@@ -303,6 +330,7 @@ struct TraceEventItem
 class TraceEnumerator::Impl : public Observer
 {
   friend class TraceEnumerator;
+  using FilterList = std::list<std::function<bool(TraceEventDataItem item, const std::wstring &value)>>;
 public:
   TraceEnumerator::Impl::Impl(const FormatDatabase *db);
   TraceEnumerator::Impl::~Impl();
@@ -322,6 +350,7 @@ private:
   bool GenerateLogEntry(const GUID &fileGuid, DWORD traceId, const FILETIME &timeStamp, DWORD processId, DWORD threadId, PVOID params, size_t paramLen);
   bool TestFilters(TraceEventItem &tei);
   bool EvaluateItem(TraceEventItem &tei) const;
+  std::pair<FilterList::const_iterator, FilterList::const_iterator> GetFilterRange() const;
 private:
   const FormatDatabase *db_;
   LogCallback logger_;
@@ -329,7 +358,9 @@ private:
   FILETIME startTime_;
   std::vector<std::unique_ptr<TraceEventItem>> allTraces_;
   std::vector<TraceEventItem *> filteredTraceEvents_;
-  std::vector<std::function<bool (TraceEventDataItem item, const std::wstring &value)>> filters_;
+  mutable std::mutex traceLock_;
+  FilterList filters_;
+  mutable std::mutex filterLock_;
   std::function<void ()> providersUpdated_;
 };
 
@@ -356,11 +387,14 @@ void TraceEnumerator::Impl::SetProvidersUpdatedCallback(const std::function<void
 
 void TraceEnumerator::Impl::Notify(const Observable *o)
 {
-  for(auto &&te : allTraces_)
   {
-    if(te->dataState == DataState::NoProvider)
+    std::lock_guard<std::mutex> l(traceLock_);
+    for (auto &&te : allTraces_)
     {
-      te->dataState = DataState::NoData;
+      if (te->dataState == DataState::NoProvider)
+      {
+        te->dataState = DataState::NoData;
+      }
     }
   }
   if(providersUpdated_)
@@ -393,13 +427,19 @@ void TraceEnumerator::SetCountCallback(const CountCallback &countCallback)
 
 void TraceEnumerator::AddFilter(const std::function<bool (TraceEventDataItem item, const std::wstring &txt)> &filter)
 {
-  impl_->filters_.push_back(filter);
+  {
+    std::lock_guard<std::mutex> l(impl_->filterLock_);
+    impl_->filters_.push_back(filter);
+  }
   impl_->ApplyFilters();
 }
 
 void TraceEnumerator::RemoveAllFilters()
 {
-  impl_->filters_.clear();
+  {
+    std::lock_guard<std::mutex> l(impl_->filterLock_);
+    impl_->filters_.clear();
+  }
   impl_->ApplyFilters();
 }
 
@@ -448,12 +488,13 @@ bool TraceEnumerator::Impl::GenerateLogEntry(const GUID &fileGuid, DWORD traceId
 
 bool TraceEnumerator::Impl::TestFilters(TraceEventItem &tei)
 {
+  auto filterRange = GetFilterRange();
   tei.EvaluateItem(*db_);
-  for(auto &&f : filters_)
+  for(auto it = filterRange.first; it != filterRange.second; ++it)
   {
     for(auto v = TraceEventDataItem::TraceIndex; v < TraceEventDataItem::MAX_ITEM; ++v)
     {
-      if(!f(v, tei[v]))
+      if(!(*it)(v, tei[v]))
       {
         return false;
       }
@@ -464,12 +505,15 @@ bool TraceEnumerator::Impl::TestFilters(TraceEventItem &tei)
 
 void TraceEnumerator::Impl::ApplyFilters()
 {
-  filteredTraceEvents_.clear();
-  for(auto &&te : allTraces_)
   {
-    if(TestFilters(*te))
+    std::lock_guard<std::mutex> l(traceLock_);
+    filteredTraceEvents_.clear();
+    for (auto &&te : allTraces_)
     {
-      filteredTraceEvents_.push_back(te.get());
+      if (TestFilters(*te))
+      {
+        filteredTraceEvents_.push_back(te.get());
+      }
     }
   }
   if(countCallback_)
@@ -496,15 +540,22 @@ void CALLBACK TraceEnumerator::Impl::EventCallback(PEVENT_TRACE pEvent)
   }
   auto mofData = reinterpret_cast<MofType *>(pEvent->MofData);
   DWORD traceId = LOWORD(pEvent->Header.Version);
-  context->allTraces_.push_back(std::make_unique<TraceEventItem>(mofData->sourceFileGUID, context->startTime_ + mofData->timeStamp, traceId, mofData->processId, mofData->threadId, static_cast<DWORD>(context->allTraces_.size()), &mofData->params, pEvent->MofLength));
-  context->EvaluateItem(*context->allTraces_.back());
-  if(context->TestFilters(*context->allTraces_.back()))
+  auto tei = std::make_unique<TraceEventItem>(mofData->sourceFileGUID, context->startTime_ + mofData->GetTimeStamp(), traceId, mofData->processId, mofData->threadId, static_cast<DWORD>(context->allTraces_.size()), &mofData->params, pEvent->MofLength);
+  context->EvaluateItem(*tei);
+  size_t filteredItemCount = 0;
+  const bool filterMatch = context->TestFilters(*tei);
   {
-    context->filteredTraceEvents_.push_back(context->allTraces_.back().get());
+    std::lock_guard<std::mutex> l(context->traceLock_);
+    context->allTraces_.push_back(std::move(tei));
+    if (filterMatch)
+    {
+      context->filteredTraceEvents_.push_back(context->allTraces_.back().get());
+    }
+    filteredItemCount = context->filteredTraceEvents_.size();
   }
   if(context->countCallback_)
   {
-    context->countCallback_(context->filteredTraceEvents_.size());
+    context->countCallback_(filteredItemCount);
   }
   if (context->logger_)
   {
@@ -515,6 +566,12 @@ void CALLBACK TraceEnumerator::Impl::EventCallback(PEVENT_TRACE pEvent)
 bool TraceEnumerator::Impl::EvaluateItem(TraceEventItem &ev) const
 {
   return ev.EvaluateItem(*db_);
+}
+
+std::pair<TraceEnumerator::Impl::FilterList::const_iterator, TraceEnumerator::Impl::FilterList::const_iterator> TraceEnumerator::Impl::GetFilterRange() const
+{
+  std::lock_guard<std::mutex> l(filterLock_);
+  return std::make_pair(filters_.cbegin(), filters_.cend());
 }
 
 void TraceEnumerator::Impl::SetStartTime(const FILETIME &startTime)
@@ -530,28 +587,37 @@ void TraceEnumerator::Impl::SetStartTime(const LARGE_INTEGER &startTime)
 
 size_t TraceEnumerator::Impl::GetItemCount() const
 {
+  std::lock_guard<std::mutex> l(traceLock_);
   return filteredTraceEvents_.size();
 }
 
 const std::wstring &TraceEnumerator::Impl::GetItemValue(size_t index, TraceEventDataItem item) const
 {
   static std::wstring EmptyString;
-  if(index >= filteredTraceEvents_.size())
+  TraceEventItem *ev = nullptr;
   {
-    return EmptyString;
+    std::lock_guard<std::mutex> l(traceLock_);
+    if (index >= filteredTraceEvents_.size())
+    {
+      return EmptyString;
+    }
+    ev = filteredTraceEvents_[index];
   }
-  auto ev = filteredTraceEvents_[index];
   EvaluateItem(*ev);
   return (*ev)[item];
 }
 
 const wchar_t *TraceEnumerator::Impl::GetItemValue(size_t index, TraceEventDataItem item, size_t *valueLength) const
 {
-  if(index >= filteredTraceEvents_.size())
+  TraceEventItem *ev = nullptr;
   {
-    return nullptr;
+    std::lock_guard<std::mutex> l(traceLock_);
+    if (index >= filteredTraceEvents_.size())
+    {
+      return nullptr;
+    }
+    ev = filteredTraceEvents_[index];
   }
-  auto ev = filteredTraceEvents_[index];
   EvaluateItem(*ev);
   if(valueLength)
   {
@@ -574,7 +640,7 @@ bool LogfileEnumerator::Start()
   EVENT_TRACE_LOGFILEW traceFile;
   ZeroMemory(&traceFile, sizeof(traceFile));
   g_thread_enum = impl_.get();
-  traceFile.EventCallback = Impl::EventCallback<MOF_DATA_FILE>;
+  traceFile.EventCallback = Impl::EventCallback<MofDataFromFile>;
   traceFile.LogFileMode = EVENT_TRACE_FILE_MODE_NONE;
   traceFile.LogFileName = const_cast<LPWSTR>(logPath_.c_str());
   auto traceHandle = OpenTraceW(&traceFile);
@@ -596,6 +662,7 @@ void LogfileEnumerator::Stop()
 LiveTraceEnumerator::LiveTraceEnumerator(const FormatDatabase &db, const std::wstring &sessionName)
   : TraceEnumerator(db)
   , sessionName_(sessionName)
+  , traceHandle_((TRACEHANDLE)INVALID_HANDLE_VALUE)
 {
 }
 
@@ -605,7 +672,7 @@ void LiveTraceEnumerator::InitSession()
   auto traceProps = reinterpret_cast<EVENT_TRACE_PROPERTIES *>(&traceBuffer_[0]);
   traceProps->Wnode.BufferSize = static_cast<ULONG>(traceBuffer_.size());
   CoCreateGuid(&traceProps->Wnode.Guid);
-  traceProps->Wnode.ClientContext = 2;
+  traceProps->Wnode.ClientContext = 1;
   traceProps->Wnode.Flags = WNODE_FLAG_TRACED_GUID;
   traceProps->FlushTimer = 1;
   traceProps->LogFileMode = EVENT_TRACE_USE_LOCAL_SEQUENCE | EVENT_TRACE_REAL_TIME_MODE;
@@ -619,7 +686,7 @@ bool LiveTraceEnumerator::Start()
   ZeroMemory(&traceFile, sizeof(traceFile));
   traceFile.LoggerName = const_cast<wchar_t *>(sessionName_.c_str());
 
-  traceFile.EventCallback = Impl::EventCallback<MOF_DATA_LIVE>;
+  traceFile.EventCallback = Impl::EventCallback<MofDataLive>;
   traceFile.LogFileMode = EVENT_TRACE_REAL_TIME_MODE;
   traceFile.LogfileHeader.LogFileMode = EVENT_TRACE_REAL_TIME_MODE;
   //traceFile.LogFileName = GetSessionName();
@@ -664,6 +731,10 @@ bool LiveTraceEnumerator::Start()
 
 void LiveTraceEnumerator::Stop()
 {
+  if (traceHandle_ == (TRACEHANDLE)INVALID_HANDLE_VALUE)
+  {
+    return;
+  }
   auto traceProps = reinterpret_cast<EVENT_TRACE_PROPERTIES *>(&traceBuffer_[0]);
   ControlTraceW(traceHandle_, GetSessionName(), traceProps, EVENT_TRACE_CONTROL_STOP);
   if (processor_ && processor_->joinable())

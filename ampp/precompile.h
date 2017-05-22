@@ -33,6 +33,7 @@
 #include <filesystem>
 #include <functional>
 #include <thread>
+#include <mutex>
 
 #ifndef AMPP_INTERNAL_BUILD
 #include <ampp/config/autolink.h>
