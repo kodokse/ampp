@@ -4,6 +4,7 @@
 #include "trace_util.h"
 #include "trace_format_impl.h"
 #include "trace_format_data_impl.h"
+#include <comdef.h>
 
 namespace etl
 {
@@ -11,7 +12,17 @@ namespace etl
 namespace
 {
 
-std::wstring GetNtStatusString(NTSTATUS s)
+template<class T>
+std::wstring ToString(T v, const std::wstring &spec)
+{
+  std::wstring fmt = L"%";
+  fmt += spec;
+  wchar_t tmp[40];
+  swprintf_s(tmp, fmt.c_str(), v);
+  return tmp;
+}
+
+std::wstring GetErrorMessageString(DWORD s)
 {
   LPWSTR msgBuf = nullptr;
   DWORD langId = MAKELANGID(LANG_ENGLISH, SUBLANG_ENGLISH_US); //MAKELANGID(LANG_NEUTRAL, SUBLANG_NEUTRAL);
@@ -22,19 +33,17 @@ std::wstring GetNtStatusString(NTSTATUS s)
                             reinterpret_cast<LPWSTR>(&msgBuf),
                             0,
                             NULL);
-  std::wstring rv(msgBuf, len);
-  LocalFree(msgBuf);
+  std::wstring rv;
+  if (msgBuf)
+  {
+    rv.assign(msgBuf, len);
+    LocalFree(msgBuf);
+  }
+  else
+  {
+    rv = ToString(s, L"X");
+  }
   return rv;
-}
-
-template<class T>
-std::wstring ToString(T v, const std::wstring &spec)
-{
-  std::wstring fmt = L"%";
-  fmt += spec;
-  wchar_t tmp[40];
-  swprintf_s(tmp, fmt.c_str(), v);
-  return tmp;
 }
 
 bool InsertTraceData(const std::wstring &type, const TraceFormat &fmt, TraceFormatData &data, const std::wstring &typeExtra, std::wstring &out)
@@ -47,8 +56,14 @@ bool InsertTraceData(const std::wstring &type, const TraceFormat &fmt, TraceForm
     },
     {L"ItemNTSTATUS", [](const TraceFormat &fmt, TraceFormatData &data, const std::wstring &, std::wstring &out)
               {
-                out += data.ValidFor(sizeof(NTSTATUS)) ? GetNtStatusString(data.As<NTSTATUS>()) : L"";
+                out += data.ValidFor(sizeof(NTSTATUS)) ? GetErrorMessageString(data.As<NTSTATUS>()) : L"";
                 data.Advance(sizeof(NTSTATUS));
+              }
+    },
+    { L"ItemHRESULT", [](const TraceFormat &fmt, TraceFormatData &data, const std::wstring &, std::wstring &out)
+              {
+                out += data.ValidFor(sizeof(HRESULT)) ? GetErrorMessageString(data.As<HRESULT>()) : L"";
+                data.Advance(sizeof(HRESULT));
               }
     },
     {L"ItemLong", [](const TraceFormat &fmt, TraceFormatData &data, const std::wstring &typeExtra, std::wstring &out)

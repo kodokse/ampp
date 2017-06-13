@@ -279,6 +279,8 @@ struct TraceEventItem
   //
   std::vector<std::wstring> values;
   //
+  void *metadata_;
+  //
   std::wstring &operator[](TraceEventDataItem item)
   {
     return values.at(static_cast<size_t>(item));
@@ -293,6 +295,7 @@ struct TraceEventItem
     , traceIdx(trid)
     , paramData(reinterpret_cast<std::uint8_t *>(d), reinterpret_cast<std::uint8_t *>(d) + dl)
     , dataState(DataState::NoData)
+    , metadata_(nullptr)
   {
     values.resize(static_cast<size_t>(TraceEventDataItem::MAX_ITEM));
     (*this)[TraceEventDataItem::TimeStamp] = FormatFileTime(L"Y-M-D H:m:S.l", ts);
@@ -339,11 +342,14 @@ public:
   size_t GetItemCount() const;
   const wchar_t *GetItemValue(size_t index, TraceEventDataItem item, size_t *valueLength) const;
   const std::wstring &GetItemValue(size_t index, TraceEventDataItem item) const;
+  void *GetItemMetadata(size_t index);
+  bool SetItemMetadata(size_t index, void *metadata);
   void ApplyFilters();
   template <class MofType>
   static void CALLBACK EventCallback(PEVENT_TRACE pEvent);
   std::vector<GUID> GetTraceGuids() const;
   void SetProvidersUpdatedCallback(const std::function<void ()> &pup);
+  void ClearAllTraces();
   //
   void Notify(const Observable *o) override;
 private:
@@ -403,6 +409,12 @@ void TraceEnumerator::Impl::Notify(const Observable *o)
   }
 }
 
+void TraceEnumerator::Impl::ClearAllTraces()
+{
+  std::lock_guard<std::mutex> l(traceLock_);
+  filteredTraceEvents_.clear();
+  allTraces_.clear();
+}
 
 thread_local TraceEnumerator::Impl *g_thread_enum = nullptr;
 
@@ -458,9 +470,24 @@ const std::wstring &TraceEnumerator::GetItemValue(size_t index, TraceEventDataIt
   return impl_->GetItemValue(index, item);
 }
 
+void *TraceEnumerator::GetItemMetadata(size_t index)
+{
+  return impl_->GetItemMetadata(index);
+}
+
+bool TraceEnumerator::SetItemMetadata(size_t index, void *metadata)
+{
+  return impl_->SetItemMetadata(index, metadata);
+}
+
 void TraceEnumerator::ApplyFilters()
 {
   impl_->ApplyFilters();
+}
+
+void TraceEnumerator::RemoveAllItems()
+{
+  impl_->ClearAllTraces();
 }
 
 ////////////////////
@@ -626,6 +653,26 @@ const wchar_t *TraceEnumerator::Impl::GetItemValue(size_t index, TraceEventDataI
   return (*ev)[item].c_str();
 }
 
+void *TraceEnumerator::Impl::GetItemMetadata(size_t index)
+{
+  std::lock_guard<std::mutex> l(traceLock_);
+  if (index >= filteredTraceEvents_.size())
+  {
+    return nullptr;
+  }
+  return filteredTraceEvents_[index]->metadata_;
+}
+
+bool TraceEnumerator::Impl::SetItemMetadata(size_t index, void *metadata)
+{
+  std::lock_guard<std::mutex> l(traceLock_);
+  if (index >= filteredTraceEvents_.size())
+  {
+    return false;
+  }
+  filteredTraceEvents_[index]->metadata_ = metadata;
+  return true;
+}
 
 ////////////////////
 

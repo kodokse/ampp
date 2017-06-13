@@ -58,8 +58,11 @@ public:
   void RemoveAllFilters();
   void ApplyFilters();
   size_t GetItemCount() const;
+  void RemoveAllItems();
   const wchar_t *GetItemValue(size_t index, TraceEventDataItem item, size_t *valueLength) const;
   const std::wstring &GetItemValue(size_t index, TraceEventDataItem item) const;
+  void *GetItemMetadata(size_t index);
+  bool SetItemMetadata(size_t index, void *metadata);
   virtual bool Start() = 0;
   virtual void Stop() = 0;
 protected:
