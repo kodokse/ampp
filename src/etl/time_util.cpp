@@ -33,6 +33,15 @@ FILETIME operator+(const FILETIME &lhs, const FILETIME &rhs)
   return rv;
 }
 
+FILETIME GetCurrentLocalFileTime()
+{
+  FILETIME now;
+  SYSTEMTIME st;
+  GetLocalTime(&st);
+  SystemTimeToFileTime(&st, &now);
+  return now;
+}
+
 std::wstring FormatFileTime(const wchar_t *fmt, const FILETIME &ft)
 {
   std::wstring rv;

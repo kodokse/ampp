@@ -87,7 +87,7 @@ FILETIME MofDataLive::GetTimeStamp()
   }
   LARGE_INTEGER li;
   memcpy(&li, &timeStamp, sizeof(li));
-  li.QuadPart = ((li.QuadPart - reference.QuadPart) * 1000000) / qpf.QuadPart;
+  li.QuadPart = ((li.QuadPart - reference.QuadPart) * 10000000LL) / qpf.QuadPart;
   FILETIME rv;
   memcpy(&rv, &li, sizeof(rv));
   return rv;
@@ -756,9 +756,7 @@ bool LiveTraceEnumerator::Start()
     EnableTrace(TRUE, 0xFFFFFFFF, TRACE_LEVEL_INFORMATION, &tg, traceHandle_);
     //EnableTraceEx2(traceHandle_, &tg, EVENT_CONTROL_CODE_ENABLE_PROVIDER, TRACE_LEVEL_INFORMATION, 0, 0, 0, );
   }
-  FILETIME now;
-  GetSystemTimeAsFileTime(&now);
-  impl_->SetStartTime(now);
+  impl_->SetStartTime(GetCurrentLocalFileTime());
   TRACEHANDLE openTraceHandle = OpenTraceW(&traceFile);
   processor_ = std::make_unique<std::thread>([this, &openTraceHandle]()
   {
