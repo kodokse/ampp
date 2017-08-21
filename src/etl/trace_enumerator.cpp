@@ -6,6 +6,7 @@
 #include "trace_format_data_impl.h"
 #include "trace_util.h"
 #include "trace_format_impl.h"
+#include "string_util.h"
 
 #include <Evntrace.h>
 
@@ -303,6 +304,13 @@ struct TraceEventItem
     (*this)[TraceEventDataItem::ThreadId] = std::to_wstring(tid);
     (*this)[TraceEventDataItem::TraceIndex] = std::to_wstring(order);
   }
+  TraceEventItem(const std::vector<std::wstring> &items)
+    : traceIdx(0)
+    , dataState(DataState::HasData)
+    , metadata_(nullptr)
+    , values(items)
+  {
+  }
   bool EvaluateItem(const FormatDatabase &db)
   {
     if(dataState == DataState::HasData)
@@ -347,6 +355,7 @@ public:
   void ApplyFilters();
   template <class MofType>
   static void CALLBACK EventCallback(PEVENT_TRACE pEvent);
+  void AddItem(std::unique_ptr<TraceEventItem> item);
   std::vector<GUID> GetTraceGuids() const;
   void SetProvidersUpdatedCallback(const std::function<void ()> &pup);
   void ClearAllTraces();
@@ -569,24 +578,29 @@ void CALLBACK TraceEnumerator::Impl::EventCallback(PEVENT_TRACE pEvent)
   DWORD traceId = LOWORD(pEvent->Header.Version);
   auto tei = std::make_unique<TraceEventItem>(mofData->sourceFileGUID, context->startTime_ + mofData->GetTimeStamp(), traceId, mofData->processId, mofData->threadId, static_cast<DWORD>(context->allTraces_.size()), &mofData->params, pEvent->MofLength);
   context->EvaluateItem(*tei);
-  size_t filteredItemCount = 0;
-  const bool filterMatch = context->TestFilters(*tei);
-  {
-    std::lock_guard<std::mutex> l(context->traceLock_);
-    context->allTraces_.push_back(std::move(tei));
-    if (filterMatch)
-    {
-      context->filteredTraceEvents_.push_back(context->allTraces_.back().get());
-    }
-    filteredItemCount = context->filteredTraceEvents_.size();
-  }
-  if(context->countCallback_)
-  {
-    context->countCallback_(filteredItemCount);
-  }
+  context->AddItem(std::move(tei));
   if (context->logger_)
   {
     context->GenerateLogEntry(mofData->sourceFileGUID, traceId, context->startTime_ + mofData->timeStamp, mofData->processId, mofData->threadId, &mofData->params, pEvent->MofLength);
+  }
+}
+
+void TraceEnumerator::Impl::AddItem(std::unique_ptr<TraceEventItem> item)
+{
+  size_t filteredItemCount = 0;
+  const bool filterMatch = TestFilters(*item);
+  {
+    std::lock_guard<std::mutex> l(traceLock_);
+    allTraces_.push_back(std::move(item));
+    if (filterMatch)
+    {
+      filteredTraceEvents_.push_back(allTraces_.back().get());
+    }
+    filteredItemCount = filteredTraceEvents_.size();
+  }
+  if (countCallback_)
+  {
+    countCallback_(filteredItemCount);
   }
 }
 
@@ -793,6 +807,119 @@ const wchar_t *LiveTraceEnumerator::GetSessionName() const
 {
   return sessionName_.c_str();
 }
+
+/////////////////////////////////////
+
+template <class CharT>
+std::vector<CharT> ReadWholeFile(const fs::path &filePath)
+{
+  std::vector<CharT> data;
+  auto h = CreateFileW(filePath.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
+  if (h == INVALID_HANDLE_VALUE)
+  {
+    return data;
+  }
+  auto fileSize = GetFileSize(h, nullptr);
+  if (fileSize == 0)
+  {
+    CloseHandle(h);
+    return data;
+  }
+  data.resize((fileSize + (sizeof(CharT) - 1)) / sizeof(CharT));
+  if (!ReadFile(h, &data[0], fileSize, &fileSize, nullptr))
+  {
+    CloseHandle(h);
+    data.clear();
+    return data;
+  }
+  CloseHandle(h);
+  return data;
+}
+
+TxtfileEnumerator::TxtfileEnumerator(const FormatDatabase &db, const fs::path &logPath)
+  : TraceEnumerator(db)
+  , logPath_(logPath)
+{
+}
+
+bool TxtfileEnumerator::Start()
+{
+  std::map<size_t, size_t> eventItemMapper {
+    {0, (size_t)TraceEventDataItem::TraceIndex},
+    {1, (size_t)TraceEventDataItem::ModuleName},
+    {2, (size_t)TraceEventDataItem::ProcessId},
+    {3, (size_t)TraceEventDataItem::ThreadId},
+    {4, (size_t)TraceEventDataItem::SourceFile},
+    {5, (size_t)TraceEventDataItem::Function},
+    {6, (size_t)TraceEventDataItem::TimeStamp},
+    {7, (size_t)TraceEventDataItem::Message},
+    {8, (size_t)TraceEventDataItem::LineNumber}
+  };
+  const std::map<std::string, size_t> eventStringItemMapper {
+    { "ID", (size_t)TraceEventDataItem::TraceIndex },
+    { "LOG", (size_t)TraceEventDataItem::ModuleName },
+    { "PROCESS", (size_t)TraceEventDataItem::ProcessId },
+    { "THREAD", (size_t)TraceEventDataItem::ThreadId },
+    { "FILE", (size_t)TraceEventDataItem::SourceFile },
+    { "FUNCTION", (size_t)TraceEventDataItem::Function },
+    { "TIMESTAMP", (size_t)TraceEventDataItem::TimeStamp },
+    { "MESSAGE", (size_t)TraceEventDataItem::Message },
+    { "LINE", (size_t)TraceEventDataItem::LineNumber }
+  };
+  std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
+  auto fileData = ReadWholeFile<char>(logPath_);
+  if (fileData.empty())
+  {
+    return false;
+  }
+  const char *it = &fileData[0];
+  const char *end = it + fileData.size();
+  bool firstLine = true;
+  auto lines = Split<char>(it, end, '\n');
+  for (auto &&l : lines)
+  {
+    TrimR(l);
+    auto items = Split<char>(l, '\t');
+    if (firstLine)
+    {
+      firstLine = false;
+      for (size_t n = 0; n < items.size(); ++n)
+      {
+        auto it = eventStringItemMapper.find(items[n]);
+        if (it == eventStringItemMapper.end())
+        {
+          continue;
+        }
+        firstLine = true;
+        eventItemMapper[n] = it->second;
+      }
+    }
+    //// if we have a header, don't create a log entry for it
+    if (firstLine)
+    {
+      firstLine = false;
+      continue;
+    }
+    std::vector<std::wstring> witems((size_t)TraceEventDataItem::MAX_ITEM);
+    size_t i = 0;
+    for (auto &&im : items)
+    {
+      if (i >= witems.size())
+      {
+        break;
+      }
+      witems[eventItemMapper.at(i++)] = converter.from_bytes(im);
+    }
+    auto tei = std::make_unique<TraceEventItem>(witems);
+    impl_->AddItem(std::move(tei));
+  }
+  return true;
+}
+
+void TxtfileEnumerator::Stop()
+{
+}
+
 
 } // namespace etl
 

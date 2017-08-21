@@ -4,10 +4,12 @@
 namespace etl
 {
 
-std::vector<std::wstring> Split(const wchar_t *&s, const wchar_t *end, wchar_t ch)
+template <class CharT>
+std::vector<std::basic_string<CharT>> Split(const CharT *&s, const CharT *end, CharT ch)
 {
-  std::vector<std::wstring> rv;
-  std::wstring tmp;
+  using StringT = std::basic_string<CharT>;
+  std::vector<StringT> rv;
+  StringT tmp;
   while(s != end && *s)
   {
     if(*s == ch)
@@ -30,11 +32,13 @@ std::vector<std::wstring> Split(const wchar_t *&s, const wchar_t *end, wchar_t c
   return rv;
 }
 
-std::vector<std::wstring> Split(const wchar_t *&s, const wchar_t *end, const wchar_t *match)
+template <class CharT>
+std::vector<std::basic_string<CharT>> Split(const CharT *&s, const CharT *end, const CharT *match)
 {
-  std::vector<std::wstring> rv;
-  std::wstring tmp;
-  std::wstring tmp2;
+  using StringT = std::basic_string<CharT>;
+  std::vector<StringT> rv;
+  StringT tmp;
+  StringT tmp2;
   auto cur = match;
   while(s != end && *s)
   {
@@ -71,10 +75,12 @@ std::vector<std::wstring> Split(const wchar_t *&s, const wchar_t *end, const wch
   return rv;
 }
 
-std::vector<std::wstring> Split(const std::wstring &s, wchar_t ch)
+template <class CharT>
+std::vector<std::basic_string<CharT>> Split(const std::basic_string<CharT> &s, CharT ch)
 {
-  std::vector<std::wstring> rv;
-  std::wstring tmp;
+  using StringT = std::basic_string<CharT>;
+  std::vector<StringT> rv;
+  StringT tmp;
   for(auto cv : s)
   {
     if(cv == ch)
@@ -96,11 +102,13 @@ std::vector<std::wstring> Split(const std::wstring &s, wchar_t ch)
   return rv;
 }
 
-std::vector<std::wstring> Split(const std::wstring &s, const wchar_t *match)
+template <class CharT>
+std::vector<std::basic_string<CharT>> Split(const std::basic_string<CharT> &s, const CharT *match)
 {
-  std::vector<std::wstring> rv;
-  std::wstring tmp;
-  std::wstring tmp2;
+  using StringT = std::basic_string<CharT>;
+  std::vector<StringT> rv;
+  StringT tmp;
+  StringT tmp2;
   auto cur = match;
   for(auto cv : s)
   {
@@ -151,6 +159,19 @@ void SkipUntil(const wchar_t *&fmtLine, const wchar_t *endFmtLine, wchar_t ch)
     ++fmtLine;
   }
 }
+
+//////////////////////////////////////
+
+template std::vector<std::basic_string<wchar_t>> Split(const wchar_t *&s, const wchar_t *end, wchar_t ch);
+template std::vector<std::basic_string<wchar_t>> Split(const wchar_t *&s, const wchar_t *end, const wchar_t *match);
+template std::vector<std::basic_string<wchar_t>> Split(const std::basic_string<wchar_t> &s, wchar_t ch);
+template std::vector<std::basic_string<wchar_t>> Split(const std::basic_string<wchar_t> &s, const wchar_t *match);
+
+template std::vector<std::basic_string<char>> Split(const char *&s, const char *end, char ch);
+template std::vector<std::basic_string<char>> Split(const char *&s, const char *end, const char *match);
+template std::vector<std::basic_string<char>> Split(const std::basic_string<char> &s, char ch);
+template std::vector<std::basic_string<char>> Split(const std::basic_string<char> &s, const char *match);
+
 
 } // namespace etl
 

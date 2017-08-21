@@ -95,5 +95,15 @@ private:
   std::unique_ptr<std::thread> processor_;
 };
 
+class TxtfileEnumerator : public TraceEnumerator
+{
+public:
+  TxtfileEnumerator(const FormatDatabase &db, const fs::path &logPath);
+  bool Start() override;
+  void Stop() override;
+private:
+  fs::path logPath_;
+};
+
 } // namespace etl
 

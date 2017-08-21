@@ -1,5 +1,5 @@
 
-#if _MSC_VER == 1910
+#if _MSC_VER >= 1910 && _MSC_VER < 1920
 #define AMPP_TOOLSET "141"
 #elif _MSC_VER == 1900
 #define AMPP_TOOLSET "140"

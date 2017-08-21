@@ -131,7 +131,7 @@ bool PdbProvider::Impl::EnumerateTrace(const PdbSymbol &sym, Architecture arch, 
     traceFormat.fileInfoFlags = arch ==  Architecture::X64 ? FIF_64BIT_TRACE : FIF_32BIT_TRACE;
 
     auto modInfo = AdvanceString(name);
-    auto modData = Split(modInfo, nullptr, L' ');
+    auto modData = Split<wchar_t>(modInfo, nullptr, L' ');
     GUID fileGuid;
     GuidFromString(modData[0], &fileGuid);
     traceFormat.moduleName = modData[1];

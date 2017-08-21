@@ -316,7 +316,7 @@ std::vector<GUID> PdbFile::GetSourceFileGuids() const
     if (wcscmp(name, L"TMF:") == 0)
     {
       auto modInfo = AdvanceString(name);
-      auto modData = Split(modInfo, nullptr, L' ');
+      auto modData = Split<wchar_t>(modInfo, nullptr, L' ');
       GUID fileGuid;
       if (GuidFromString(modData[0], &fileGuid))
       {

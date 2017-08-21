@@ -3,10 +3,35 @@
 namespace etl
 {
 
-std::vector<std::wstring> Split(const wchar_t *&s, const wchar_t *end, wchar_t ch);
-std::vector<std::wstring> Split(const wchar_t *&s, const wchar_t *end, const wchar_t *match);
-std::vector<std::wstring> Split(const std::wstring &s, wchar_t ch);
-std::vector<std::wstring> Split(const std::wstring &s, const wchar_t *match);
+template <class CharT>
+std::vector<std::basic_string<CharT>> Split(const CharT *&s, const CharT *end, CharT ch);
+template <class CharT>
+std::vector<std::basic_string<CharT>> Split(const CharT *&s, const CharT *end, const CharT *match);
+template <class CharT>
+std::vector<std::basic_string<CharT>> Split(const std::basic_string<CharT> &s, CharT ch);
+template <class CharT>
+std::vector<std::basic_string<CharT>> Split(const std::basic_string<CharT> &s, const CharT *match);
+
+template <class CharT>
+bool IsWhite(CharT c)
+{
+  return c == ' ' || c == '\t' || c == '\r' || c == '\n';
+}
+
+template <class CharT, class TraitsT>
+std::basic_string<CharT, TraitsT> &TrimR(std::basic_string<CharT, TraitsT> &s)
+{
+  auto l = s.length();
+  while (l > 0 && IsWhite(s[l - 1]))
+  {
+    --l;
+  }
+  if (l < s.length())
+  {
+    s.resize(l);
+  }
+  return s;
+}
 
 void Skip(const wchar_t *&fmtLine, const wchar_t *endFmtLine, wchar_t ch);
 void SkipUntil(const wchar_t *&fmtLine, const wchar_t *endFmtLine, wchar_t ch);
