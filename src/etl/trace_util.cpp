@@ -138,9 +138,16 @@ bool InsertTraceData(const std::wstring &type, const TraceFormat &fmt, TraceForm
                 const auto ptrSize = (fmt.fileInfoFlags & FIF_64BIT_TRACE) != 0 ? 8 : 4;
                 if(data.ValidFor(ptrSize))
                 {
-                  std::wstringstream fmt;
-                  fmt << L"0" << (ptrSize * 2) << L"X";
-                  out += ToString(data.data, fmt.str());
+                  std::wstringstream fmtTxt;
+                  fmtTxt << L"0" << (ptrSize * 2) << L"X";
+                  if ((fmt.fileInfoFlags & FIF_64BIT_TRACE) != 0)
+                  {
+                    out += ToString(data.As<DWORD64>(), fmtTxt.str());
+                  }
+                  else
+                  {
+                    out += ToString(data.As<DWORD>(), fmtTxt.str());
+                  }
                   data.Advance(ptrSize);
                 }
               }
