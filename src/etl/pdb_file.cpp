@@ -2,7 +2,7 @@
 #include <ampp/etl/pdb_file.h>
 #include <DbgHelp.h>
 #include <ampp/etl/guid_util.h>
-#include "string_util.h"
+#include <ampp/etl/string_util.h>
 
 #pragma comment(lib, "dbghelp.lib")
 

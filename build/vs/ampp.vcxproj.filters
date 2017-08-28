@@ -60,9 +60,6 @@
     <ClInclude Include="..\..\src\etl\trace_util.h">
       <Filter>Source Files\etl</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\src\etl\string_util.h">
-      <Filter>Source Files\etl</Filter>
-    </ClInclude>
     <ClInclude Include="..\..\ampp\etl\guid_util.h">
       <Filter>Header Files\etl</Filter>
     </ClInclude>
@@ -82,6 +79,9 @@
       <Filter>Header Files\etl</Filter>
     </ClInclude>
     <ClInclude Include="..\..\ampp\etl\pdb_file.h">
+      <Filter>Header Files\etl</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\ampp\etl\string_util.h">
       <Filter>Header Files\etl</Filter>
     </ClInclude>
   </ItemGroup>

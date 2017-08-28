@@ -1,5 +1,5 @@
 #include "stdafx.h"
-#include "string_util.h"
+#include <ampp/etl/string_util.h>
 
 namespace etl
 {

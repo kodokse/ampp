@@ -63,6 +63,7 @@ public:
   const std::wstring &GetItemValue(size_t index, TraceEventDataItem item) const;
   void *GetItemMetadata(size_t index);
   bool SetItemMetadata(size_t index, void *metadata);
+  void InjectItem(const FILETIME &timeStamp, const std::function<std::wstring(TraceEventDataItem item)> &itemValue);
   virtual bool Start() = 0;
   virtual void Stop() = 0;
 protected:

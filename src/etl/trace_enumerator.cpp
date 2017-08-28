@@ -3,10 +3,10 @@
 #include <ampp/etl/trace_enumerator.h>
 #include <ampp/etl/time_util.h>
 #include <ampp/etl/guid_util.h>
+#include <ampp/etl/string_util.h>
 #include "trace_format_data_impl.h"
 #include "trace_util.h"
 #include "trace_format_impl.h"
-#include "string_util.h"
 
 #include <Evntrace.h>
 
@@ -311,6 +311,13 @@ struct TraceEventItem
     , values(items)
   {
   }
+  TraceEventItem()
+    : traceIdx(0)
+    , dataState(DataState::HasData)
+    , metadata_(nullptr)
+    , values(static_cast<size_t>(TraceEventDataItem::MAX_ITEM))
+  {
+  }
   bool EvaluateItem(const FormatDatabase &db)
   {
     if(dataState == DataState::HasData)
@@ -350,6 +357,7 @@ public:
   size_t GetItemCount() const;
   const wchar_t *GetItemValue(size_t index, TraceEventDataItem item, size_t *valueLength) const;
   const std::wstring &GetItemValue(size_t index, TraceEventDataItem item) const;
+  void InjectItem(const FILETIME &timeStamp, const std::function<std::wstring(TraceEventDataItem item)> &itemValue);
   void *GetItemMetadata(size_t index);
   bool SetItemMetadata(size_t index, void *metadata);
   void ApplyFilters();
@@ -366,6 +374,9 @@ private:
   bool TestFilters(TraceEventItem &tei);
   bool EvaluateItem(TraceEventItem &tei) const;
   std::pair<FilterList::const_iterator, FilterList::const_iterator> GetFilterRange() const;
+  template <class PtrT>
+  size_t FindInsertPosition(const std::vector<PtrT> &v, const std::wstring &timeStamp) const;
+  void InsertItem(std::unique_ptr<TraceEventItem> item);
 private:
   const FormatDatabase *db_;
   LogCallback logger_;
@@ -377,6 +388,7 @@ private:
   FilterList filters_;
   mutable std::mutex filterLock_;
   std::function<void ()> providersUpdated_;
+  int uniqueCounter_;
 };
 
 TraceEnumerator::Impl::Impl(const FormatDatabase *db)
@@ -487,6 +499,11 @@ void *TraceEnumerator::GetItemMetadata(size_t index)
 bool TraceEnumerator::SetItemMetadata(size_t index, void *metadata)
 {
   return impl_->SetItemMetadata(index, metadata);
+}
+
+void TraceEnumerator::InjectItem(const FILETIME &timeStamp, const std::function<std::wstring(TraceEventDataItem item)> &itemValue)
+{
+  impl_->InjectItem(timeStamp, itemValue);
 }
 
 void TraceEnumerator::ApplyFilters()
@@ -604,6 +621,43 @@ void TraceEnumerator::Impl::AddItem(std::unique_ptr<TraceEventItem> item)
   }
 }
 
+template <class U, class T>
+void InsertOrAppend(std::vector<U> &v, size_t index, T &&value)
+{
+  if (index >= v.size())
+  {
+    v.push_back(std::forward<T>(value));
+  }
+  else
+  {
+    v.insert(v.begin() + index, std::forward<T>(value));
+  }
+}
+
+void TraceEnumerator::Impl::InsertItem(std::unique_ptr<TraceEventItem> item)
+{
+  size_t filteredItemCount = 0;
+  const bool filterMatch = TestFilters(*item);
+  {
+    std::lock_guard<std::mutex> l(traceLock_);
+    //
+    auto aindex = FindInsertPosition(allTraces_, (*item)[TraceEventDataItem::TimeStamp]);
+    (*item)[TraceEventDataItem::TraceIndex] = std::to_wstring(uniqueCounter_++);
+    auto rawPtr = item.get(); // gets lost once we move
+    InsertOrAppend(allTraces_, aindex, std::move(item));
+    if (filterMatch)
+    {
+      auto findex = FindInsertPosition(filteredTraceEvents_, (*rawPtr)[TraceEventDataItem::TimeStamp]);
+      InsertOrAppend(filteredTraceEvents_, findex, rawPtr);
+    }
+    filteredItemCount = filteredTraceEvents_.size();
+  }
+  if (countCallback_)
+  {
+    countCallback_(filteredItemCount);
+  }
+}
+
 bool TraceEnumerator::Impl::EvaluateItem(TraceEventItem &ev) const
 {
   return ev.EvaluateItem(*db_);
@@ -686,6 +740,50 @@ bool TraceEnumerator::Impl::SetItemMetadata(size_t index, void *metadata)
   }
   filteredTraceEvents_[index]->metadata_ = metadata;
   return true;
+}
+
+template <class PtrT>
+size_t TraceEnumerator::Impl::FindInsertPosition(const std::vector<PtrT> &v, const std::wstring &timeStamp) const
+{
+  size_t end = v.size() - 1;
+  size_t start = 0;
+  size_t index = std::numeric_limits<size_t>::max();
+  while (end < v.size() && end >= start)
+  {
+    auto cur = (start + end) / 2;
+    auto cmp = wcscmp(timeStamp.c_str(), (*v[cur])[TraceEventDataItem::TimeStamp].c_str());
+    if (cmp > 0)
+    {
+      start = cur + 1;
+    }
+    else if (cmp < 0)
+    {
+      end = cur - 1;
+    }
+    else
+    {
+      return cur;
+    }
+  }
+  return start;
+}
+
+void TraceEnumerator::Impl::InjectItem(const FILETIME &timeStamp, const std::function<std::wstring(TraceEventDataItem item)> &itemValue)
+{
+  auto ts = FormatFileTime(L"Y-M-D H:m:S.l", timeStamp);
+  //
+  auto tei = std::make_unique<TraceEventItem>();
+  for (TraceEventDataItem item = TraceEventDataItem::ModuleName; item < TraceEventDataItem::MAX_ITEM; ++item)
+  {
+    if (item == TraceEventDataItem::TimeStamp)
+    {
+      continue;
+    }
+    (*tei)[item] = itemValue(item);
+  }
+  (*tei)[TraceEventDataItem::TimeStamp] = ts;
+  //
+  InsertItem(std::move(tei));
 }
 
 ////////////////////

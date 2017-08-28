@@ -299,13 +299,13 @@
     <ClInclude Include="..\..\ampp\etl\guid_util.h" />
     <ClInclude Include="..\..\ampp\etl\pdb_file.h" />
     <ClInclude Include="..\..\ampp\etl\pdb_provider.h" />
+    <ClInclude Include="..\..\ampp\etl\string_util.h" />
     <ClInclude Include="..\..\ampp\etl\time_util.h" />
     <ClInclude Include="..\..\ampp\etl\trace_base.h" />
     <ClInclude Include="..\..\ampp\etl\trace_enumerator.h" />
     <ClInclude Include="..\..\ampp\etl\trace_event_data.h" />
     <ClInclude Include="..\..\ampp\macros\autolink_template.h" />
     <ClInclude Include="..\..\ampp\precompile.h" />
-    <ClInclude Include="..\..\src\etl\string_util.h" />
     <ClInclude Include="..\..\src\etl\trace_format_data_impl.h" />
     <ClInclude Include="..\..\src\etl\trace_format_impl.h" />
     <ClInclude Include="..\..\src\etl\trace_util.h" />

@@ -2,7 +2,7 @@
 #include <ampp/etl/pdb_provider.h>
 #include <ampp/etl/guid_util.h>
 #include <ampp/etl/pdb_file.h>
-#include "string_util.h"
+#include <ampp/etl/string_util.h>
 #include "trace_format_impl.h"
 
 namespace etl

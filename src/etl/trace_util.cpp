@@ -1,6 +1,6 @@
 #include "stdafx.h"
 
-#include "string_util.h"
+#include <ampp/etl/string_util.h>
 #include "trace_util.h"
 #include "trace_format_impl.h"
 #include "trace_format_data_impl.h"
@@ -38,6 +38,7 @@ std::wstring GetErrorMessageString(DWORD s)
   {
     rv.assign(msgBuf, len);
     LocalFree(msgBuf);
+    TrimR(rv);
   }
   else
   {
@@ -52,6 +53,11 @@ bool InsertTraceData(const std::wstring &type, const TraceFormat &fmt, TraceForm
     {L"FUNC", [](const TraceFormat &fmt, TraceFormatData &, const std::wstring &, std::wstring &out)
               {
                 out += fmt.function;
+              }
+    },
+    { L"LINE", [](const TraceFormat &fmt, TraceFormatData &, const std::wstring &, std::wstring &out)
+              {
+                out += std::to_wstring(fmt.lineNumber);
               }
     },
     {L"ItemNTSTATUS", [](const TraceFormat &fmt, TraceFormatData &data, const std::wstring &, std::wstring &out)
