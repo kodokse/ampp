@@ -47,6 +47,17 @@ std::wstring CopyUntil(CIterT &fmtLine, const CIterT &endFmtLine, wchar_t ch)
   return rv;
 }
 
+template <class CIterT, class PredT>
+std::wstring CopyWhile(CIterT &fmtLine, const CIterT &endFmtLine, PredT p)
+{
+  std::wstring rv;
+  while (fmtLine != endFmtLine && p(*fmtLine))
+  {
+    rv += *fmtLine++;
+  }
+  return rv;
+}
+
 template <class CharT, class IntT>
 struct IntTraits
 {
