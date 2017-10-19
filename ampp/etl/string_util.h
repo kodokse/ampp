@@ -85,7 +85,7 @@ public:
 
 
 template <class CIterT, class IntT, std::enable_if_t<std::is_signed_v<IntT>>>
-bool ParseInt(CIterT &cur, const CIterT &end, IntT &val, int radix)
+bool ParseInt(CIterT &cur, const CIterT &end, IntT &val, int radix, int maxDigits = -1)
 {
   using Traits = IntTraits<typename CIterT::value_type, IntT>;
   bool negate = false;
@@ -100,12 +100,14 @@ bool ParseInt(CIterT &cur, const CIterT &end, IntT &val, int radix)
     cur = tmp;
     return false;
   }
+  int digitCount = 0;
   val = 0;
-  while(cur != end && Traits::IsDigit(*cur, radix))
+  while(cur != end && Traits::IsDigit(*cur, radix) && (maxDigits > 0 ? digitCount < maxDigits : true))
   {
     val *= radix;
     val += Traits::Value(*cur, radix);
     ++cur;
+    ++digitCount;
   }
   if(negate)
   {
@@ -115,19 +117,21 @@ bool ParseInt(CIterT &cur, const CIterT &end, IntT &val, int radix)
 }
 
 template <class CIterT, class IntT>
-bool ParseInt(CIterT &cur, const CIterT &end, IntT &val, int radix)
+bool ParseInt(CIterT &cur, const CIterT &end, IntT &val, int radix, int maxDigits = -1)
 {
   using Traits = IntTraits<typename CIterT::value_type, IntT>;
   if(!Traits::IsDigit(*cur, radix))
   {
     return false;
   }
+  int digitCount = 0;
   val = 0;
-  while(cur != end && Traits::IsDigit(*cur, radix))
+  while(cur != end && Traits::IsDigit(*cur, radix) && (maxDigits > 0 ? digitCount < maxDigits : true))
   {
     val *= radix;
     val += Traits::Value(*cur, radix);
     ++cur;
+    ++digitCount;
   }
   return true;
 }
