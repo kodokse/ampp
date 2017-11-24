@@ -48,23 +48,20 @@ namespace etl
 {
 
 #pragma pack(push, 1)
-struct MofDataFromFile
+struct MofDataBase
 {
   GUID  sourceFileGUID;
   FILETIME timeStamp;
   DWORD threadId;
   DWORD processId;
   BYTE  *params;
+};
+struct MofDataFromFile : public MofDataBase
+{
   FILETIME GetTimeStamp();
 };
-struct MofDataLive
+struct MofDataLive : public MofDataBase
 {
-  DWORD sequenceId;
-  GUID  sourceFileGUID;
-  FILETIME timeStamp;
-  DWORD threadId;
-  DWORD processId;
-  BYTE  *params;
   FILETIME GetTimeStamp();
 };
 #pragma pack(pop)
@@ -594,7 +591,12 @@ void CALLBACK TraceEnumerator::Impl::EventCallback(PEVENT_TRACE pEvent)
   {
     return;
   }
-  auto mofData = reinterpret_cast<MofType *>(pEvent->MofData);
+  DWORD offset = 0;
+  if (pEvent->Header.Class.Version >= 0x80)
+  {
+    offset += sizeof(DWORD);
+  }
+  auto mofData = reinterpret_cast<MofType *>(reinterpret_cast<char *>(pEvent->MofData) + offset);
   DWORD traceId = LOWORD(pEvent->Header.Version);
   auto tei = std::make_unique<TraceEventItem>(mofData->sourceFileGUID, context->startTime_ + mofData->GetTimeStamp(), traceId, mofData->processId, mofData->threadId, static_cast<DWORD>(context->allTraces_.size()), &mofData->params, pEvent->MofLength);
   context->EvaluateItem(*tei);
