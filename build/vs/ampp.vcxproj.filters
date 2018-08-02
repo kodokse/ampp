@@ -113,5 +113,8 @@
     <ClCompile Include="..\..\src\etl\pdb_file.cpp">
       <Filter>Source Files\etl</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\src\etl\ntstatus.cpp">
+      <Filter>Source Files\etl</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

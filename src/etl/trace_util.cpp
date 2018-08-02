@@ -9,6 +9,8 @@
 namespace etl
 {
 
+const wchar_t *GetNtStatusText(DWORD status);
+
 namespace
 {
 
@@ -62,8 +64,12 @@ bool InsertTraceData(const std::wstring &type, const TraceFormat &fmt, TraceForm
     },
     {L"ItemNTSTATUS", [](const TraceFormat &fmt, TraceFormatData &data, const std::wstring &, std::wstring &out)
               {
-                out += data.ValidFor(sizeof(NTSTATUS)) ? GetErrorMessageString(data.As<NTSTATUS>()) : L"";
-                data.Advance(sizeof(NTSTATUS));
+                if (data.ValidFor(sizeof(NTSTATUS)))
+                {
+                  auto errTxt = GetNtStatusText(data.As<NTSTATUS>());
+                  out += errTxt ? errTxt : GetErrorMessageString(data.As<NTSTATUS>());
+                  data.Advance(sizeof(NTSTATUS));
+                  }
               }
     },
     { L"ItemHRESULT", [](const TraceFormat &fmt, TraceFormatData &data, const std::wstring &, std::wstring &out)
@@ -162,7 +168,8 @@ bool InsertTraceData(const std::wstring &type, const TraceFormat &fmt, TraceForm
   auto it = mappers.find(type);
   if(it == mappers.end())
   {
-    std::wcerr << L"NO MAPPER FOR: " << type << std::endl;
+    //std::wcerr << L"NO MAPPER FOR: " << type << std::endl;
+    MessageBoxW(nullptr, type.c_str(), L"NO MAPPER FOR", MB_OK);
     return false;
   }
   it->second(fmt, data, typeExtra, out);

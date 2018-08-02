@@ -5,7 +5,7 @@ namespace etl
 {
 
 template <class CharT>
-std::vector<std::basic_string<CharT>> Split(const CharT *&s, const CharT *end, CharT ch)
+std::vector<std::basic_string<CharT>> Split(const CharT *&s, const CharT *end, CharT ch, SplitFlags flags)
 {
   using StringT = std::basic_string<CharT>;
   std::vector<StringT> rv;
@@ -33,7 +33,7 @@ std::vector<std::basic_string<CharT>> Split(const CharT *&s, const CharT *end, C
 }
 
 template <class CharT>
-std::vector<std::basic_string<CharT>> Split(const CharT *&s, const CharT *end, const CharT *match)
+std::vector<std::basic_string<CharT>> Split(const CharT *&s, const CharT *end, const CharT *match, SplitFlags flags)
 {
   using StringT = std::basic_string<CharT>;
   std::vector<StringT> rv;
@@ -76,7 +76,7 @@ std::vector<std::basic_string<CharT>> Split(const CharT *&s, const CharT *end, c
 }
 
 template <class CharT>
-std::vector<std::basic_string<CharT>> Split(const std::basic_string<CharT> &s, CharT ch)
+std::vector<std::basic_string<CharT>> Split(const std::basic_string<CharT> &s, CharT ch, SplitFlags flags)
 {
   using StringT = std::basic_string<CharT>;
   std::vector<StringT> rv;
@@ -103,7 +103,7 @@ std::vector<std::basic_string<CharT>> Split(const std::basic_string<CharT> &s, C
 }
 
 template <class CharT>
-std::vector<std::basic_string<CharT>> Split(const std::basic_string<CharT> &s, const CharT *match)
+std::vector<std::basic_string<CharT>> Split(const std::basic_string<CharT> &s, const CharT *match, SplitFlags flags)
 {
   using StringT = std::basic_string<CharT>;
   std::vector<StringT> rv;

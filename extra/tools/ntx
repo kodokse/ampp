@@ -1,0 +1,5 @@
+#!/bin/sh
+outfile="./ntstatusx.h"
+echo "#define AMPP_NTSTATUS_LIST \\" > $outfile
+sed -n -- 's/\#define \(STATUS_[A-Z0-9_]*\)\s*(.*/X(\1)\\/p' $1 >> $outfile
+#sed -n -- 's/\#define \(STATUS_[A-Z0-9_]*\)\s*(.*/X(\1)\\/p' $1 >> $outfile

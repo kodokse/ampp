@@ -321,6 +321,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\src\etl\guid_util.cpp" />
+    <ClCompile Include="..\..\src\etl\ntstatus.cpp" />
     <ClCompile Include="..\..\src\etl\pdb_file.cpp" />
     <ClCompile Include="..\..\src\etl\pdb_provider.cpp" />
     <ClCompile Include="..\..\src\etl\string_util.cpp" />

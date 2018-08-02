@@ -3,12 +3,14 @@
 namespace etl
 {
 
+enum class SplitFlags {Default, SkipEmpty};
+
 template <class CharT>
 std::vector<std::basic_string<CharT>> Split(const CharT *&s, const CharT *end, CharT ch);
 template <class CharT>
 std::vector<std::basic_string<CharT>> Split(const CharT *&s, const CharT *end, const CharT *match);
 template <class CharT>
-std::vector<std::basic_string<CharT>> Split(const std::basic_string<CharT> &s, CharT ch);
+std::vector<std::basic_string<CharT>> Split(const std::basic_string<CharT> &s, CharT ch, SplitFlags flags);
 template <class CharT>
 std::vector<std::basic_string<CharT>> Split(const std::basic_string<CharT> &s, const CharT *match);
 
